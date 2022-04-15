@@ -25,9 +25,12 @@ on:
 
 jobs:
   deploy:
-    name: ${{ github.ref_name }}
+    name: ${{ inputs.TRELLIS_ENVIRONMENT }}
     runs-on: ubuntu-latest
 
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref_name }}
+      cancel-in-progress: false
     if: github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]'
     steps:
       - name: Checkout Bedrock

@@ -1,0 +1,13 @@
+{
+  "name": "Build and test",
+  "description": "Build Webpack assets and run phpcs",
+  "categories": [
+    "php",
+    "js",
+    "scss"
+  ],
+  "filePatterns": [
+    "composer.json$",
+    "package.json$"
+  ]
+}

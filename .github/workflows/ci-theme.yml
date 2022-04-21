@@ -57,7 +57,7 @@ jobs:
           restore-keys: ${{ runner.os }}-${{ inputs.NODE_VERSION }}-yarn-
 
       - name: Install dependencies with Yarn
-        working-directory: ${{ inputs.THEME_NAME }}
+        working-directory: web/app/themes/${{ inputs.THEME_NAME }}
         run: yarn install --frozen-lockfile
 
       - name: Build and compile assets
@@ -98,4 +98,3 @@ jobs:
         run: composer install --no-progress --prefer-dist --optimize-autoloader --no-suggest
 
       - run: composer run-script style:check
-

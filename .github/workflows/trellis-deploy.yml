@@ -13,6 +13,9 @@ on:
       TRELLIS_ENVIRONMENT:
         type: string
         required: true
+      TRELLIS_REPOSITORY:
+        type: string
+        required: true
     secrets:
       REPO_PAT:
         required: true
@@ -47,7 +50,7 @@ jobs:
       - name: Checkout Trellis
         uses: actions/checkout@v2
         with:
-          repository: ItinerisLtd/itineris-trellis
+          repository: ${{ inputs.TRELLIS_REPOSITORY }}
           path: trellis
           token: ${{ secrets.REPO_PAT }}
 

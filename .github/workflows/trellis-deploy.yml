@@ -25,6 +25,8 @@ on:
         required: true
       ANSIBLE_VAULT_PASSWORD:
         required: true
+      FONTAWESOME_NPM_AUTH_TOKEN:
+        required: false
 
 jobs:
   deploy:
@@ -70,4 +72,5 @@ jobs:
       - name: Deploy
         working-directory: trellis
         run: trellis deploy --verbose ${{ inputs.TRELLIS_ENVIRONMENT }}
-
+        env:
+          FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}

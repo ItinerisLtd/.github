@@ -12,7 +12,8 @@ on:
         required: false
       THEME_NAME:
         type: string
-        required: true
+        default: ''
+        required: false
       TRELLIS_ENVIRONMENT:
         type: string
         required: true
@@ -47,6 +48,7 @@ jobs:
           path: bedrock
 
       - uses: actions/setup-node@v2
+        if: ${{ inputs.THEME_NAME != '' }}
         with:
           node-version: '${{ inputs.NODE_VERSION }}'
           cache: yarn

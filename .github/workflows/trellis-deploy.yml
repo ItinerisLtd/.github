@@ -5,14 +5,15 @@ on:
     inputs:
       BEDROCK_DEPLOY_BRANCH:
         type: string
-        default: '${{ github.ref_name }}'
+        default: "${{ github.ref_name }}"
+        required: false
       NODE_VERSION:
         type: number
         default: 14
         required: false
       THEME_NAME:
         type: string
-        default: ''
+        default: ""
         required: false
       TRELLIS_ENVIRONMENT:
         type: string
@@ -20,6 +21,22 @@ on:
       TRELLIS_REPOSITORY:
         type: string
         required: true
+      TRELLIS_CLI_AUTO_INIT:
+        type: boolean
+        default: true
+        required: false
+      TRELLIS_CLI_CACHE_VIRTUALENV:
+        type: boolean
+        default: true
+        required: false
+      TRELLIS_CLI_GALAXY_INSTALL:
+        type: boolean
+        default: true
+        required: false
+      TRELLIS_CLI_VERSION:
+        type: string
+        default: latest
+        required: false
     secrets:
       REPO_PAT:
         required: true
@@ -34,11 +51,11 @@ on:
 
 jobs:
   deploy:
-    name: ${{ inputs.TRELLIS_ENVIRONMENT }}
+    name: "${{ inputs.TRELLIS_ENVIRONMENT }}"
     runs-on: ubuntu-latest
 
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref_name }}
+      group: "${{ github.workflow }}-${{ github.ref_name }}"
       cancel-in-progress: false
     if: github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]'
     steps:
@@ -48,34 +65,38 @@ jobs:
           path: bedrock
 
       - uses: actions/setup-node@v2
-        if: ${{ inputs.THEME_NAME != '' }}
+        if: "${{ inputs.THEME_NAME != '' }}"
         with:
-          node-version: '${{ inputs.NODE_VERSION }}'
+          node-version: "${{ inputs.NODE_VERSION }}"
           cache: yarn
           cache-dependency-path: bedrock/web/app/themes/${{ inputs.THEME_NAME }}/yarn.lock
 
       - name: Checkout Trellis
         uses: actions/checkout@v2
         with:
-          repository: ${{ inputs.TRELLIS_REPOSITORY }}
+          repository: "${{ inputs.TRELLIS_REPOSITORY }}"
           path: trellis
-          token: ${{ secrets.REPO_PAT }}
+          token: "${{ secrets.REPO_PAT }}"
 
       - uses: shimataro/ssh-key-action@v2
         with:
-          key: ${{ secrets.TRELLIS_DEPLOY_SSH_PRIVATE_KEY }}
-          known_hosts: ${{ secrets.TRELLIS_DEPLOY_SSH_KNOWN_HOSTS }}
+          key: "${{ secrets.TRELLIS_DEPLOY_SSH_PRIVATE_KEY }}"
+          known_hosts: "${{ secrets.TRELLIS_DEPLOY_SSH_KNOWN_HOSTS }}"
 
       - uses: webfactory/ssh-agent@v0.5.4
         with:
-          ssh-private-key: ${{ secrets.TRELLIS_DEPLOY_SSH_PRIVATE_KEY }}
+          ssh-private-key: "${{ secrets.TRELLIS_DEPLOY_SSH_PRIVATE_KEY }}"
 
       - uses: roots/setup-trellis-cli@v1
         with:
-          ansible-vault-password: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+          ansible-vault-password: "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"
+          auto-init: "${{ inputs.TRELLIS_CLI_AUTO_INIT }}"
+          cache-virtualenv: "${{ inputs.TRELLIS_CLI_CACHE_VIRTUALENV }}"
+          galaxy-install: "${{ inputs.TRELLIS_CLI_GALAXY_INSTALL }}"
+          version: "${{ inputs.TRELLIS_CLI_VERSION }}"
 
       - name: Deploy
         working-directory: trellis
-        run: trellis deploy --verbose --branch=${{ inputs.BEDROCK_DEPLOY_BRANCH }} ${{ inputs.TRELLIS_ENVIRONMENT }}
+        run: trellis deploy --verbose --branch="${{ inputs.BEDROCK_DEPLOY_BRANCH }}" "${{ inputs.TRELLIS_ENVIRONMENT }}"
         env:
-          FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
+          FONTAWESOME_NPM_AUTH_TOKEN: "${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}"

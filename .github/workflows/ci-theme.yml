@@ -13,13 +13,14 @@ on:
         required: false
       THEME_NAME:
         type: string
-        required: true
+        required: false
     secrets:
       FONTAWESOME_NPM_AUTH_TOKEN:
         required: false
 
 jobs:
   check-theme-changes:
+    if: ${{ inputs.THEME_NAME != '' && inputs.THEME_NAME != 'xxxTHEME_NAMExxx' }}
     runs-on: ubuntu-latest
     outputs:
       THEME_CHANGED: ${{ steps.diff.outputs.THEME_CHANGED }}
@@ -30,7 +31,7 @@ jobs:
         run: |
           git fetch --no-tags --prune --depth=1 origin ${{ github.event.repository.default_branch }}
           CHANGED_FILES=$(git diff origin/${{ github.event.repository.default_branch }} HEAD --name-only --diff-filter=ACMRT web/app/themes/${{ inputs.THEME_NAME }} || echo '')
-          FILES_CHANGED=$([ -z $CHANGED_FILES] && echo 'false' || echo 'true')
+          FILES_CHANGED=$([ -z $CHANGED_FILES ] && echo 'false' || echo 'true')
           echo "::set-output name=THEME_CHANGED::$FILES_CHANGED"
 
   node:

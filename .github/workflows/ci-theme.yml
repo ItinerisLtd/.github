@@ -34,10 +34,23 @@ jobs:
           FILES_CHANGED=$([ -z $CHANGED_FILES ] && echo 'false' || echo 'true')
           echo "::set-output name=THEME_CHANGED::$FILES_CHANGED"
 
+  check-if-has-build-command:
+    if: ${{ inputs.THEME_NAME != '' && inputs.THEME_NAME != 'xxxTHEME_NAMExxx' }}
+    runs-on: ubuntu-latest
+    outputs:
+      THEME_CHANGED: ${{ steps.diff.outputs.HAS_BUILD_COMMAND }}
+    steps:
+      - uses: actions/checkout@v2
+
+      - id: has-build-cmd
+        run: |
+          HAS_BUILD_COMMAND=$(grep '"build": "[^"]*' package.json && echo 'true' || echo 'false')
+          echo "::set-output name=HAS_BUILD_COMMAND::$HAS_BUILD_COMMAND"
+
   node:
     name: build-production-assets
-    needs: check-theme-changes
-    if: ${{ needs.check-theme-changes.outputs.THEME_CHANGED == 'true' }}
+    needs: [check-theme-changes, check-if-has-build-command]
+    if: ${{ needs.check-theme-changes.outputs.THEME_CHANGED == 'true' && needs.check-if-has-build-command.outputs.HAS_BUILD_COMMAND == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:

@@ -1,0 +1,11 @@
+{
+  "name": "Test",
+  "description": "Run phpcs",
+  "categories": [
+    "php"
+  ],
+  "filePatterns": [
+    "composer.json$",
+    "package.json$"
+  ]
+}

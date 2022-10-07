@@ -7,6 +7,9 @@ on:
         type: number
         default: 7.4
         required: false
+    secrets:
+      PRIVATE_PACKAGIST_TOKEN:
+        required: true
 
 jobs:
   php:
@@ -33,7 +36,10 @@ jobs:
           key: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-${{ hashFiles('**/composer.json') }}
           restore-keys: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-
 
+      - name: Setup Composer Private Packagist authentication
+        run: composer config --global --auth http-basic.repo.packagist.com itineris ${{ secrets.PRIVATE_PACKAGIST_TOKEN }}
+
       - name: Install Composer dependencies
-        run: composer install --no-progress --prefer-dist --optimize-autoloader --no-suggest
+        run: composer install --no-progress --prefer-dist --optimize-autoloader
 
       - run: composer run-script style:check

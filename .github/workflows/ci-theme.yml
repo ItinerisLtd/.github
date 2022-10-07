@@ -38,7 +38,7 @@ jobs:
     if: ${{ inputs.THEME_NAME != '' && inputs.THEME_NAME != 'xxxTHEME_NAMExxx' }}
     runs-on: ubuntu-latest
     outputs:
-      THEME_CHANGED: ${{ steps.diff.outputs.HAS_BUILD_COMMAND }}
+      HAS_BUILD_COMMAND: ${{ steps.has-build-cmd.outputs.HAS_BUILD_COMMAND }}
     steps:
       - uses: actions/checkout@v2
 

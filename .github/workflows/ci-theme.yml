@@ -44,7 +44,7 @@ jobs:
 
       - id: has-build-cmd
         run: |
-          HAS_BUILD_COMMAND=$(grep '"build": "[^"]*' package.json && echo 'true' || echo 'false')
+          HAS_BUILD_COMMAND=$(grep '"build": "[^"]*' web/app/themes/${{ inputs.THEME_NAME }}/package.json && echo 'true' || echo 'false')
           echo "::set-output name=HAS_BUILD_COMMAND::$HAS_BUILD_COMMAND"
 
   node:

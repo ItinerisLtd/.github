@@ -17,6 +17,8 @@ on:
     secrets:
       FONTAWESOME_NPM_AUTH_TOKEN:
         required: false
+      PRIVATE_PACKAGIST_TOKEN:
+        required: false
 
 jobs:
   check-theme-changes:
@@ -76,6 +78,8 @@ jobs:
     needs: check-theme-changes
     if: ${{ needs.check-theme-changes.outputs.THEME_CHANGED == 'true' }}
     runs-on: ubuntu-latest
+    env:
+      PRIVATE_PACKAGIST_TOKEN: ${{ secrets.PRIVATE_PACKAGIST_TOKEN }}
     defaults:
       run:
         working-directory: web/app/themes/${{ inputs.THEME_NAME }}
@@ -99,6 +103,10 @@ jobs:
           path: ${{ steps.composercache.outputs.dir }}
           key: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-${{ hashFiles('**/composer.json') }}
           restore-keys: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-
+
+      - if: ${{ env.PRIVATE_PACKAGIST_TOKEN != '' }}
+        name: Setup Composer Private Packagist authentication
+        run: composer config --global --auth http-basic.repo.packagist.com itineris ${{ env.PRIVATE_PACKAGIST_TOKEN }}
 
       - name: Install Composer dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader

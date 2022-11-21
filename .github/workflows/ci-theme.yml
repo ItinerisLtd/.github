@@ -17,6 +17,8 @@ on:
     secrets:
       FONTAWESOME_NPM_AUTH_TOKEN:
         required: false
+      PRIVATE_PACKAGIST_TOKEN:
+        required: false
 
 jobs:
   check-theme-changes:
@@ -99,6 +101,10 @@ jobs:
           path: ${{ steps.composercache.outputs.dir }}
           key: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-${{ hashFiles('**/composer.json') }}
           restore-keys: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-
+
+      - name: Setup Composer Private Packagist authentication
+        if: ${{ secrets.PRIVATE_PACKAGIST_TOKEN != '' }}
+        run: composer config --global --auth http-basic.repo.packagist.com itineris ${{ secrets.PRIVATE_PACKAGIST_TOKEN }}
 
       - name: Install Composer dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader

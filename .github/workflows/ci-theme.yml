@@ -14,6 +14,10 @@ on:
       THEME_NAME:
         type: string
         required: false
+      NPM_BUILD_CMD:
+        type: string
+        default: yarn build:production
+        required: false
     secrets:
       FONTAWESOME_NPM_AUTH_TOKEN:
         required: false
@@ -69,7 +73,7 @@ jobs:
           FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
 
       - name: Build and compile assets
-        run: yarn build:production
+        run: ${{ inputs.NPM_BUILD_CMD }}
         env:
           FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
 

@@ -94,6 +94,8 @@ jobs:
           cache-virtualenv: "${{ inputs.TRELLIS_CLI_CACHE_VIRTUALENV }}"
           galaxy-install: "${{ inputs.TRELLIS_CLI_GALAXY_INSTALL }}"
           version: "${{ inputs.TRELLIS_CLI_VERSION }}"
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Deploy
         working-directory: trellis

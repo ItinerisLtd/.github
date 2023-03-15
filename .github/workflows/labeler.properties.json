@@ -1,0 +1,13 @@
+{
+  "name": "Add missing Kodiak auto-merge labels",
+  "description": "Adds missing required auto-merge labels for Kodiak",
+  "categories": [
+    "dependencies",
+    "dependabot",
+    "kodiak"
+  ],
+  "filePatterns": [
+    "composer.json$",
+    "composer.lock$"
+  ]
+}

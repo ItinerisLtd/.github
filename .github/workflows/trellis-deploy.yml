@@ -7,10 +7,6 @@ on:
         type: string
         default: "${{ github.ref_name }}"
         required: false
-      NODE_VERSION:
-        type: number
-        default: 14
-        required: false
       THEME_NAME:
         type: string
         default: ""
@@ -64,10 +60,11 @@ jobs:
         with:
           path: bedrock
 
-      - uses: actions/setup-node@v3
-        if: "${{ inputs.THEME_NAME != '' }}"
+      - if: "${{ inputs.THEME_NAME != '' }}"
+        id: setup-node
+        uses: actions/setup-node@v3
         with:
-          node-version: "${{ inputs.NODE_VERSION }}"
+          node-version-file: "web/app/themes/${{ inputs.THEME_NAME }}/.nvmrc"
           cache: yarn
           cache-dependency-path: bedrock/web/app/themes/${{ inputs.THEME_NAME }}/yarn.lock
 

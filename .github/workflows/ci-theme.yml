@@ -3,10 +3,6 @@ name: ci-theme
 on:
   workflow_call:
     inputs:
-      NODE_VERSION:
-        type: number
-        default: 14
-        required: false
       PHP_VERSION:
         type: number
         default: 7.4
@@ -51,10 +47,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Setup Node ${{ inputs.NODE_VERSION }}
+      - id: setup-node
+        name: Setup Node
         uses: actions/setup-node@v3
         with:
-          node-version: ${{ inputs.NODE_VERSION }}
+          node-version-file: "web/app/themes/${{ inputs.THEME_NAME }}/.nvmrc"
 
       - name: Restore Yarn cache
         id: yarncache
@@ -65,8 +62,8 @@ jobs:
       - uses: actions/cache@v3
         with:
           path: ${{ steps.yarncache.outputs.dir }}
-          key: ${{ runner.os }}-${{ inputs.NODE_VERSION }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: ${{ runner.os }}-${{ inputs.NODE_VERSION }}-yarn-
+          key: ${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: ${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-yarn-
 
       - name: Install dependencies with Yarn
         working-directory: web/app/themes/${{ inputs.THEME_NAME }}

@@ -60,11 +60,11 @@ jobs:
     if: github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]'
     steps:
       - name: Checkout Bedrock
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           path: bedrock
 
-      - uses: actions/setup-node@v2
+      - uses: actions/setup-node@v3
         if: "${{ inputs.THEME_NAME != '' }}"
         with:
           node-version: "${{ inputs.NODE_VERSION }}"
@@ -72,7 +72,7 @@ jobs:
           cache-dependency-path: bedrock/web/app/themes/${{ inputs.THEME_NAME }}/yarn.lock
 
       - name: Checkout Trellis
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: "${{ inputs.TRELLIS_REPOSITORY }}"
           path: trellis
@@ -83,7 +83,7 @@ jobs:
           key: "${{ secrets.TRELLIS_DEPLOY_SSH_PRIVATE_KEY }}"
           known_hosts: "${{ secrets.TRELLIS_DEPLOY_SSH_KNOWN_HOSTS }}"
 
-      - uses: webfactory/ssh-agent@v0.5.4
+      - uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: "${{ secrets.TRELLIS_DEPLOY_SSH_PRIVATE_KEY }}"
 

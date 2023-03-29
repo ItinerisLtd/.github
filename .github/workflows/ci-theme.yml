@@ -31,14 +31,14 @@ jobs:
     outputs:
       THEME_CHANGED: ${{ steps.diff.outputs.THEME_CHANGED }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - id: diff
         run: |
           git fetch --no-tags --prune --depth=1 origin ${{ github.event.repository.default_branch }}
           CHANGED_FILES=$(git diff origin/${{ github.event.repository.default_branch }} HEAD --name-only --diff-filter=ACMRT web/app/themes/${{ inputs.THEME_NAME }} || echo '')
-          FILES_CHANGED=$([ -z $CHANGED_FILES ] && echo 'false' || echo 'true')
-          echo "::set-output name=THEME_CHANGED::$FILES_CHANGED"
+          FILES_CHANGED=$([ -z ${CHANGED_FILES} ] && echo 'false' || echo 'true')
+          echo "THEME_CHANGED=${FILES_CHANGED}" >> "${GITHUB_OUTPUT}"
 
   node:
     name: build-production-assets
@@ -49,18 +49,20 @@ jobs:
       run:
         working-directory: web/app/themes/${{ inputs.THEME_NAME }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Setup Node ${{ inputs.NODE_VERSION }}
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: ${{ inputs.NODE_VERSION }}
 
       - name: Restore Yarn cache
         id: yarncache
-        run: echo "::set-output name=dir::$(yarn cache dir)"
+        run: echo "dir=$(yarn cache dir)" >> "${GITHUB_OUTPUT}"
+        env:
+          FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
 
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         with:
           path: ${{ steps.yarncache.outputs.dir }}
           key: ${{ runner.os }}-${{ inputs.NODE_VERSION }}-yarn-${{ hashFiles('**/yarn.lock') }}
@@ -88,7 +90,7 @@ jobs:
       run:
         working-directory: web/app/themes/${{ inputs.THEME_NAME }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Setup PHP ${{ inputs.PHP_VERSION }}
         uses: shivammathur/setup-php@v2
@@ -100,9 +102,9 @@ jobs:
 
       - name: Restore Composer cache
         id: composercache
-        run: echo "::set-output name=dir::$(composer config cache-files-dir)"
+        run: echo "dir=$(composer config cache-files-dir)" >> "${GITHUB_OUTPUT}"
 
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         with:
           path: ${{ steps.composercache.outputs.dir }}
           key: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-${{ hashFiles('**/composer.json') }}

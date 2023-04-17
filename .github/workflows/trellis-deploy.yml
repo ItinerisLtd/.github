@@ -73,7 +73,6 @@ jobs:
         with:
           node-version: "${{ inputs.NODE_VERSION }}"
           cache: yarn
-          cache-dependency-path: bedrock/web/app/themes/${{ inputs.THEME_NAME }}/yarn.lock
 
       - name: Checkout Trellis
         uses: actions/checkout@v3

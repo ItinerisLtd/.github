@@ -72,7 +72,6 @@ jobs:
         if: "${{ inputs.THEME_NAME != '' }}"
         with:
           node-version: "${{ inputs.NODE_VERSION }}"
-          cache: yarn
 
       - name: Checkout Trellis
         uses: actions/checkout@v3

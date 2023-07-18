@@ -1,5 +1,7 @@
+# yamllint disable-line rule:document-start
 name: ci-theme
 
+# yamllint disable-line rule:truthy
 on:
   workflow_call:
     inputs:
@@ -26,6 +28,7 @@ on:
 
 jobs:
   check-theme-changes:
+    # yamllint disable-line rule:line-length
     if: ${{ inputs.THEME_NAME != '' && inputs.THEME_NAME != 'xxxTHEME_NAMExxx' }}
     runs-on: ubuntu-latest
     outputs:
@@ -55,16 +58,21 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: ${{ inputs.NODE_VERSION }}
+        env:
+          FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Restore Yarn cache
         id: yarncache
         run: echo "dir=$(yarn cache dir)" >> "${GITHUB_OUTPUT}"
         env:
           FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/cache@v3
         with:
           path: ${{ steps.yarncache.outputs.dir }}
+          # yamllint disable-line rule:line-length
           key: ${{ runner.os }}-${{ inputs.NODE_VERSION }}-yarn-${{ hashFiles('**/yarn.lock') }}
           restore-keys: ${{ runner.os }}-${{ inputs.NODE_VERSION }}-yarn-
 
@@ -73,6 +81,7 @@ jobs:
         run: yarn install --frozen-lockfile
         env:
           FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and compile assets
         run: ${{ inputs.NPM_BUILD_CMD }}
@@ -107,11 +116,13 @@ jobs:
       - uses: actions/cache@v3
         with:
           path: ${{ steps.composercache.outputs.dir }}
+          # yamllint disable-line rule:line-length
           key: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-${{ hashFiles('**/composer.json') }}
           restore-keys: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-
 
       - if: ${{ env.PRIVATE_PACKAGIST_TOKEN != '' }}
         name: Setup Composer Private Packagist authentication
+        # yamllint disable-line rule:line-length
         run: composer config --global --auth http-basic.repo.packagist.com itineris ${{ env.PRIVATE_PACKAGIST_TOKEN }}
 
       - name: Install Composer dependencies

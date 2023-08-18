@@ -1,4 +1,4 @@
-name: "Add missing auto-merge labels for Kodiak"
+name: "Labeler"
 
 on:
   workflow_call:

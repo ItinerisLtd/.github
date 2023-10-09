@@ -1,5 +1,7 @@
+# yamllint disable-line rule:document-start
 name: "Labeler"
 
+# yamllint disable-line rule:truthy
 on:
   workflow_call:
   workflow_dispatch:
@@ -9,6 +11,7 @@ on:
 
 jobs:
   triage:
+    # yamllint disable-line rule:line-length
     if: ${{ github.actor == 'kodiakhq[bot]' || github.actor == 'dependabot[bot]' }}
     permissions:
       contents: read

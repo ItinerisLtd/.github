@@ -59,7 +59,8 @@ jobs:
         with:
           node-version: ${{ inputs.NODE_VERSION }}
           cache: yarn
-          cache-dependency-path: yarn.lock
+          # yamllint disable-line rule:line-length
+          cache-dependency-path: web/app/themes/${{ inputs.THEME_NAME }}/yarn.lock
         env:
           FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -108,9 +109,10 @@ jobs:
           key: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-
 
-      - name: Setup Composer Private Packagist authentication
+      - if: ${{ env.PRIVATE_PACKAGIST_TOKEN != '' }}
+        name: Setup Composer Private Packagist authentication
         # yamllint disable-line rule:line-length
-        run: composer config --global --auth http-basic.repo.packagist.com itineris ${{ secrets.PRIVATE_PACKAGIST_TOKEN }}
+        run: composer config --global --auth http-basic.repo.packagist.com itineris ${{ env.PRIVATE_PACKAGIST_TOKEN }}
 
       - name: Install Composer dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader

@@ -58,27 +58,15 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: ${{ inputs.NODE_VERSION }}
+          cache: yarn
+          cache-dependency-path: yarn.lock
         env:
           FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Restore Yarn cache
-        id: yarncache
-        run: echo "dir=$(yarn cache dir)" >> "${GITHUB_OUTPUT}"
-        env:
-          FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: actions/cache@v3
-        with:
-          path: ${{ steps.yarncache.outputs.dir }}
-          # yamllint disable-line rule:line-length
-          key: ${{ runner.os }}-${{ inputs.NODE_VERSION }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: ${{ runner.os }}-${{ inputs.NODE_VERSION }}-yarn-
 
       - name: Install dependencies with Yarn
         working-directory: web/app/themes/${{ inputs.THEME_NAME }}
-        run: yarn install --frozen-lockfile
+        run: yarn install --frozen-lockfile --prefer-offline --verbose
         env:
           FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,5 +1,7 @@
+# yamllint disable-line rule:document-start
 name: deploy
 
+# yamllint disable-line rule:truthy
 on:
   workflow_call:
     inputs:
@@ -64,13 +66,16 @@ jobs:
         with:
           path: bedrock
 
-      - uses: actions/setup-node@v3
+      - name: Setup Node ${{ inputs.NODE_VERSION }}
+        uses: actions/setup-node@v3
         if: "${{ inputs.THEME_NAME != '' }}"
         with:
           node-version: "${{ inputs.NODE_VERSION }}"
           cache: yarn
+          # yamllint disable-line rule:line-length
           cache-dependency-path: bedrock/web/app/themes/${{ inputs.THEME_NAME }}/yarn.lock
         env:
+          # yamllint disable-line rule:line-length
           FONTAWESOME_NPM_AUTH_TOKEN: "${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}"
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -101,6 +106,8 @@ jobs:
 
       - name: Deploy
         working-directory: trellis
+        # yamllint disable-line rule:line-length
         run: trellis deploy --verbose --branch="${{ inputs.BEDROCK_DEPLOY_BRANCH }}" "${{ inputs.TRELLIS_ENVIRONMENT }}"
         env:
+          # yamllint disable-line rule:line-length
           FONTAWESOME_NPM_AUTH_TOKEN: "${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}"

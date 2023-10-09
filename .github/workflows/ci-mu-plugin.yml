@@ -1,5 +1,7 @@
+# yamllint disable-line rule:document-start
 name: ci-mu-plugin
 
+# yamllint disable-line rule:truthy
 on:
   workflow_call:
     inputs:

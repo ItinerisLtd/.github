@@ -35,13 +35,18 @@ jobs:
       THEME_CHANGED: ${{ steps.diff.outputs.THEME_CHANGED }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          fetch-tags: 'false'
 
       - id: diff
         run: |
-          git fetch --no-tags --prune --depth=1 origin ${{ github.event.repository.default_branch }}
-          CHANGED_FILES=$(git diff origin/${{ github.event.repository.default_branch }} HEAD --name-only --diff-filter=ACMRT web/app/themes/${{ inputs.THEME_NAME }} || echo '')
-          FILES_CHANGED=$([ -z ${CHANGED_FILES} ] && echo 'false' || echo 'true')
-          echo "THEME_CHANGED=${FILES_CHANGED}" >> "${GITHUB_OUTPUT}"
+          if git diff --quiet --diff-filter=ACMRT origin/${{ github.event.repository.default_branch }} HEAD -- web/app/themes/${{ inputs.THEME_NAME }}; then
+            echo "THEME_CHANGED=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "THEME_CHANGED=true" >> "${GITHUB_OUTPUT}"
+          fi
 
   node:
     name: build-production-assets

@@ -15,11 +15,11 @@
 
 - [ ] Refactor
 - [ ] Feature
-- [ ] Bug Fix
-- [ ] Breaking Change
+- [ ] Bug fix
+- [ ] Breaking change
 - [ ] Requires manual action post-deploy
-- [ ] Optimization
-- [ ] Documentation Update
+- [ ] Optimisation
+- [ ] Documentation update
 
 ## Description
 
@@ -51,10 +51,18 @@ images for UI changes._
 
 _If your PR includes UI changes, please utilize this checklist:_
 
-- [ ] Checked with [axe DevTools](https://www.deque.com/axe/) and addressed `Critical` and `Serious` AA issues?
+- [ ] Checked with [axe DevTools](https://www.deque.com/axe/) and addressed `Critical` and `Serious` **AA** issues?
+
+### Deployment checklist
+
+_Before deploying, ensure you have completed this checklist:_
+
+- [ ] I have deployed this PR to staging and I can confirm the behaviour is expected/correct
 
 ## [optional] Are there any post deployment tasks we need to perform?
 
 ## [optional] What gif best describes this PR or how it makes you feel?
+
+_You can find GIFs [here](https://tenor.com/) or [here](https://giphy.com/)_
 
 ![alt_text_here](gif_link_url_here)

@@ -59,7 +59,7 @@ jobs:
     concurrency:
       group: "${{ github.workflow }}-${{ github.ref_name }}"
       cancel-in-progress: false
-    if: github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]'
+    if: github.sha != vars.LAST_DEPLOY && github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]'
     steps:
       - name: Checkout Bedrock
         uses: actions/checkout@v3
@@ -111,3 +111,9 @@ jobs:
         env:
           # yamllint disable-line rule:line-length
           FONTAWESOME_NPM_AUTH_TOKEN: "${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}"
+
+      - name: Cache deployed commit hash
+        run: gh variable set LAST_DEPLOY --body='${{ github.sha }}'
+        working-directory: bedrock
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_PAT }}

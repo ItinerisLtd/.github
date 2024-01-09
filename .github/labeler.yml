@@ -1,3 +1,5 @@
 dependencies:
 - composer.json
 - composer.lock
+- yarn.lock
+- package.json

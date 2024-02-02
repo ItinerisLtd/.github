@@ -38,6 +38,7 @@ automatically close the issue.
 
 - Related ClickUp task #
 - Related FreshDesk ticket #
+- Related Sentry issue #
 - Related Issue #
 - Closes #
 

@@ -40,6 +40,8 @@ jobs:
           fetch-depth: 1
           fetch-tags: 'false'
 
+      - run: git diff --diff-filter=ACMRT origin/${{ github.event.repository.default_branch }} HEAD -- web/app/themes/${{ inputs.THEME_NAME }}
+
       - id: diff
         run: |
           if git diff --quiet --diff-filter=ACMRT origin/${{ github.event.repository.default_branch }} HEAD -- web/app/themes/${{ inputs.THEME_NAME }}; then

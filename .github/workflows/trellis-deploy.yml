@@ -67,7 +67,7 @@ jobs:
           path: bedrock
 
       - name: Setup Node ${{ inputs.NODE_VERSION }}
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         if: "${{ inputs.THEME_NAME != '' }}"
         with:
           node-version: "${{ inputs.NODE_VERSION }}"

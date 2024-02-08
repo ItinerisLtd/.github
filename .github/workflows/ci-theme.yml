@@ -34,7 +34,7 @@ jobs:
     outputs:
       THEME_CHANGED: ${{ steps.diff.outputs.THEME_CHANGED }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - id: diff
         run: |
@@ -52,10 +52,10 @@ jobs:
       run:
         working-directory: web/app/themes/${{ inputs.THEME_NAME }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Node ${{ inputs.NODE_VERSION }}
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.NODE_VERSION }}
           cache: yarn
@@ -88,7 +88,7 @@ jobs:
       run:
         working-directory: web/app/themes/${{ inputs.THEME_NAME }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup PHP ${{ inputs.PHP_VERSION }}
         uses: shivammathur/setup-php@v2
@@ -102,7 +102,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> "${GITHUB_OUTPUT}"
 
       - name: Cache dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           # yamllint disable-line rule:line-length

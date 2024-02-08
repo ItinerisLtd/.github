@@ -62,12 +62,12 @@ jobs:
     if: github.sha != vars.LAST_DEPLOY && github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]'
     steps:
       - name: Checkout Bedrock
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: bedrock
 
       - name: Setup Node ${{ inputs.NODE_VERSION }}
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         if: "${{ inputs.THEME_NAME != '' }}"
         with:
           node-version: "${{ inputs.NODE_VERSION }}"
@@ -80,7 +80,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout Trellis
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: "${{ inputs.TRELLIS_REPOSITORY }}"
           path: trellis

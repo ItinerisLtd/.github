@@ -72,6 +72,10 @@ jobs:
           FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate Font Awesome Blade Icons
+        working-directory: web/app/themes/${{ inputs.THEME_NAME }}
+        run: grep --quiet 'icons:prepare' package.json && yarn icons:prepare
+
       - name: Build and compile assets
         run: ${{ inputs.NPM_BUILD_CMD }}
         env:

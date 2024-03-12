@@ -74,7 +74,7 @@ jobs:
 
       - name: Generate Font Awesome Blade Icons
         working-directory: web/app/themes/${{ inputs.THEME_NAME }}
-        run: grep --quiet 'icons:prepare' package.json && yarn icons:prepare
+        run: grep --quiet 'icons:prepare' package.json && yarn icons:prepare || echo 'No icons to prepare'
         env:
           FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
 

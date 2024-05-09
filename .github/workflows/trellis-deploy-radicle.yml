@@ -1,0 +1,114 @@
+# yamllint disable-line rule:document-start
+name: deploy-radicle
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      RADICLE_DEPLOY_BRANCH:
+        type: string
+        default: "${{ github.ref_name }}"
+        required: false
+      NODE_VERSION:
+        type: number
+        default: 20
+        required: false
+      TRELLIS_ENVIRONMENT:
+        type: string
+        required: true
+      TRELLIS_REPOSITORY:
+        type: string
+        required: true
+      TRELLIS_CLI_AUTO_INIT:
+        type: boolean
+        default: true
+        required: false
+      TRELLIS_CLI_CACHE_VIRTUALENV:
+        type: boolean
+        default: true
+        required: false
+      TRELLIS_CLI_GALAXY_INSTALL:
+        type: boolean
+        default: true
+        required: false
+      TRELLIS_CLI_VERSION:
+        type: string
+        default: latest
+        required: false
+    secrets:
+      REPO_PAT:
+        required: true
+      TRELLIS_DEPLOY_SSH_PRIVATE_KEY:
+        required: true
+      TRELLIS_DEPLOY_SSH_KNOWN_HOSTS:
+        required: true
+      ANSIBLE_VAULT_PASSWORD:
+        required: true
+      FONTAWESOME_NPM_AUTH_TOKEN:
+        required: false
+
+jobs:
+  deploy:
+    name: "${{ inputs.TRELLIS_ENVIRONMENT }}"
+    runs-on: ubuntu-latest
+
+    concurrency:
+      group: "${{ github.workflow }}-${{ github.ref_name }}"
+      cancel-in-progress: false
+    if: github.sha != vars.LAST_DEPLOY && github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]'
+    steps:
+      - name: Checkout Radicle
+        uses: actions/checkout@v4
+        with:
+          path: radicle
+
+      - name: Setup Node ${{ inputs.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "${{ inputs.NODE_VERSION }}"
+          cache: yarn
+          # yamllint disable-line rule:line-length
+          cache-dependency-path: radicle/yarn.lock
+        env:
+          # yamllint disable-line rule:line-length
+          FONTAWESOME_NPM_AUTH_TOKEN: "${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}"
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout Trellis
+        uses: actions/checkout@v4
+        with:
+          repository: "${{ inputs.TRELLIS_REPOSITORY }}"
+          path: trellis
+          token: "${{ secrets.REPO_PAT }}"
+
+      - uses: shimataro/ssh-key-action@v2
+        with:
+          key: "${{ secrets.TRELLIS_DEPLOY_SSH_PRIVATE_KEY }}"
+          known_hosts: "${{ secrets.TRELLIS_DEPLOY_SSH_KNOWN_HOSTS }}"
+
+      - uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: "${{ secrets.TRELLIS_DEPLOY_SSH_PRIVATE_KEY }}"
+
+      - uses: roots/setup-trellis-cli@v1
+        with:
+          ansible-vault-password: "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"
+          auto-init: "${{ inputs.TRELLIS_CLI_AUTO_INIT }}"
+          cache-virtualenv: "${{ inputs.TRELLIS_CLI_CACHE_VIRTUALENV }}"
+          galaxy-install: "${{ inputs.TRELLIS_CLI_GALAXY_INSTALL }}"
+          version: "${{ inputs.TRELLIS_CLI_VERSION }}"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy
+        working-directory: trellis
+        # yamllint disable-line rule:line-length
+        run: trellis deploy --verbose --branch="${{ inputs.RADICLE_DEPLOY_BRANCH }}" "${{ inputs.TRELLIS_ENVIRONMENT }}"
+        env:
+          # yamllint disable-line rule:line-length
+          FONTAWESOME_NPM_AUTH_TOKEN: "${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}"
+
+      - name: Cache deployed commit hash
+        run: gh variable set LAST_DEPLOY --body='${{ github.sha }}'
+        working-directory: radicle
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_PAT }}

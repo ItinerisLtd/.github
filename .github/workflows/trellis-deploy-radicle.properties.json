@@ -1,0 +1,12 @@
+{
+  "name": "Trellis deploy Radicle workflow",
+  "description": "Workflow to deploy Radicle using Trellis",
+  "iconName": "trellis-icon",
+  "categories": [
+    "php"
+  ],
+  "filePatterns": [
+    "composer.json$",
+    "wp-cli-(cognomen|trellis-alias).yml$"
+  ]
+}

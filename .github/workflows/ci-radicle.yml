@@ -1,0 +1,119 @@
+# yamllint disable-line rule:document-start
+name: ci-radicle
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      NODE_VERSION:
+        type: number
+        default: 20
+        required: false
+      PHP_VERSION:
+        type: number
+        default: 8.1
+        required: false
+      NPM_BUILD_CMD:
+        type: string
+        default: yarn build:production
+        required: false
+    secrets:
+      FONTAWESOME_NPM_AUTH_TOKEN:
+        required: false
+      PRIVATE_PACKAGIST_TOKEN:
+        required: false
+
+jobs:
+  check-theme-changes:
+    # yamllint disable-line rule:line-length
+    runs-on: ubuntu-latest
+    outputs:
+      RADICLE_CHANGED: ${{ steps.diff.outputs.RADICLE_CHANGED }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: diff
+        run: |
+          git fetch --no-tags --prune --depth=1 origin ${{ github.event.repository.default_branch }}
+          CHANGED_FILES=$(git diff origin/${{ github.event.repository.default_branch }} HEAD --name-only --diff-filter=ACMRT /
+          FILES_CHANGED=$([ -z ${CHANGED_FILES} ] && echo 'false' || echo 'true')
+          echo "RADICLE_CHANGED=${FILES_CHANGED}" >> "${GITHUB_OUTPUT}"
+
+  node:
+    name: build-production-assets
+    needs: check-theme-changes
+    if: ${{ needs.check-theme-changes.outputs.RADICLE_CHANGED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node ${{ inputs.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.NODE_VERSION }}
+          cache: yarn
+          # yamllint disable-line rule:line-length
+          cache-dependency-path: yarn.lock
+        env:
+          FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies with Yarn
+        run: yarn install --frozen-lockfile --prefer-offline --verbose
+        env:
+          FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Font Awesome Blade Icons
+        run: grep --quiet 'icons:prepare' package.json && yarn icons:prepare || echo 'No icons to prepare'
+        env:
+          FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
+
+      - name: Build and compile assets
+        run: ${{ inputs.NPM_BUILD_CMD }}
+        env:
+          FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
+
+  php:
+    name: php-style-check
+    needs: check-theme-changes
+    if: ${{ needs.check-theme-changes.outputs.RADICLE_CHANGED == 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      PRIVATE_PACKAGIST_TOKEN: ${{ secrets.PRIVATE_PACKAGIST_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ inputs.PHP_VERSION }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.PHP_VERSION }}
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "${GITHUB_OUTPUT}"
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          # yamllint disable-line rule:line-length
+          key: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-
+
+      - if: ${{ env.PRIVATE_PACKAGIST_TOKEN != '' }}
+        name: Setup Composer Private Packagist authentication
+        # yamllint disable-line rule:line-length
+        run: composer config --global --auth http-basic.repo.packagist.com itineris ${{ env.PRIVATE_PACKAGIST_TOKEN }}
+
+      - name: Install Composer dependencies
+        run: composer install --no-progress --prefer-dist --optimize-autoloader
+
+      # todo: decide if we want to run the lint and use laravel pint
+      - name: Execute the Composer lint script
+        run: composer run-script lint
+
+      - name: Execute the Composer style check script
+        run: composer run-script style:check

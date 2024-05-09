@@ -111,4 +111,9 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader
 
-      - run: composer run-script style:check
+      # todo: decide if we want to run the lint and use laravel pint
+      - name: Execute the Composer lint script
+        run: composer run-script lint
+
+      - name: Execute the Composer style check script
+        run: composer run-script style:check

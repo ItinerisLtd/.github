@@ -17,6 +17,10 @@ on:
         type: string
         default: ""
         required: false
+      WORKING_DIR:
+        type: string
+        default: "site/web/app/themes/${{ inputs.THEME_NAME }}"
+        required: false
       TRELLIS_ENVIRONMENT:
         type: string
         required: true
@@ -61,10 +65,10 @@ jobs:
       cancel-in-progress: false
     if: github.sha != vars.LAST_DEPLOY && github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]'
     steps:
-      - name: Checkout Bedrock
+      - name: Checkout Site
         uses: actions/checkout@v4
         with:
-          path: bedrock
+          path: site
 
       - name: Setup Node ${{ inputs.NODE_VERSION }}
         uses: actions/setup-node@v4
@@ -73,7 +77,7 @@ jobs:
           node-version: "${{ inputs.NODE_VERSION }}"
           cache: yarn
           # yamllint disable-line rule:line-length
-          cache-dependency-path: bedrock/web/app/themes/${{ inputs.THEME_NAME }}/yarn.lock
+          cache-dependency-path: ${{ inputs.WORKING_DIR }}/yarn.lock
         env:
           # yamllint disable-line rule:line-length
           FONTAWESOME_NPM_AUTH_TOKEN: "${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}"
@@ -114,6 +118,6 @@ jobs:
 
       - name: Cache deployed commit hash
         run: gh variable set LAST_DEPLOY --body='${{ github.sha }}'
-        working-directory: bedrock
+        working-directory: site
         env:
           GITHUB_TOKEN: ${{ secrets.REPO_PAT }}

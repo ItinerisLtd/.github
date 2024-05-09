@@ -1,0 +1,12 @@
+{
+  "name": "Trellis deploy workflow",
+  "description": "Workflow to deploy using Trellis",
+  "iconName": "trellis-icon",
+  "categories": [
+    "php"
+  ],
+  "filePatterns": [
+    "composer.json$",
+    "wp-cli-(cognomen|trellis-alias).yml$"
+  ]
+}

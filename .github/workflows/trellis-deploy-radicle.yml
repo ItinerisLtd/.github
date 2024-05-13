@@ -21,6 +21,10 @@ on:
         type: string
         default: "site/web/app/themes/${{ inputs.THEME_NAME }}"
         required: false
+      LOCAL_PATH:
+        type: string
+        default: "bedrock"
+        required: false
       TRELLIS_ENVIRONMENT:
         type: string
         required: true
@@ -68,7 +72,7 @@ jobs:
       - name: Checkout Site
         uses: actions/checkout@v4
         with:
-          path: site
+          path: ${{ inputs.LOCAL_PATH }}
 
       - name: Setup Node ${{ inputs.NODE_VERSION }}
         uses: actions/setup-node@v4
@@ -118,6 +122,6 @@ jobs:
 
       - name: Cache deployed commit hash
         run: gh variable set LAST_DEPLOY --body='${{ github.sha }}'
-        working-directory: site
+        working-directory: ${{ inputs.LOCAL_PATH }}
         env:
           GITHUB_TOKEN: ${{ secrets.REPO_PAT }}

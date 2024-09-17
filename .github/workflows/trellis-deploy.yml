@@ -50,6 +50,8 @@ on:
         required: true
       FONTAWESOME_NPM_AUTH_TOKEN:
         required: false
+      ITINERIS_NPM_AUTH_TOKEN:
+        required: false 
 
 jobs:
   deploy:
@@ -78,6 +80,7 @@ jobs:
           # yamllint disable-line rule:line-length
           FONTAWESOME_NPM_AUTH_TOKEN: "${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}"
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
 
       - name: Checkout Trellis
         uses: actions/checkout@v4
@@ -111,6 +114,7 @@ jobs:
         env:
           # yamllint disable-line rule:line-length
           FONTAWESOME_NPM_AUTH_TOKEN: "${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}"
+          ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
 
       - name: Cache deployed commit hash
         run: gh variable set LAST_DEPLOY --body='${{ github.sha }}'

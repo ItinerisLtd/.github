@@ -81,6 +81,7 @@ jobs:
         run: grep --quiet 'icons:prepare' package.json && yarn icons:prepare || echo 'No icons to prepare'
         env:
           FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
+          ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
 
       - name: Build and compile assets
         run: ${{ inputs.NPM_BUILD_CMD }}

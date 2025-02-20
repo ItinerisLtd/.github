@@ -61,7 +61,7 @@ jobs:
     concurrency:
       group: "${{ github.workflow }}-${{ github.ref_name }}"
       cancel-in-progress: false
-    if: github.sha != vars.LAST_DEPLOY && github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]'
+    if: github.sha != vars.LAST_DEPLOY && github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]' && "!contains(github.event.head_commit.message, '[cd skip]')"
     steps:
       - name: Checkout Bedrock
         uses: actions/checkout@v4

@@ -58,7 +58,7 @@ on:
 jobs:
   deploy:
     name: "${{ inputs.TRELLIS_ENVIRONMENT }}"
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
 
     concurrency:
       group: "${{ github.workflow }}-${{ github.ref_name }}"

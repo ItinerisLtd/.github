@@ -119,11 +119,11 @@ jobs:
           key: "${{ secrets.TRELLIS_DEPLOY_SSH_PRIVATE_KEY }}"
           known_hosts: "${{ secrets.TRELLIS_DEPLOY_SSH_KNOWN_HOSTS }}"
 
-      - uses: webfactory/ssh-agent@v0.8.0
+      - uses: webfactory/ssh-agent@v0.9.1
         with:
           ssh-private-key: "${{ secrets.TRELLIS_DEPLOY_SSH_PRIVATE_KEY }}"
 
-      - uses: roots/setup-trellis-cli@v1
+      - uses: roots/setup-trellis-cli@v1.3.0
         with:
           ansible-vault-password: "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"
           auto-init: "${{ inputs.TRELLIS_CLI_AUTO_INIT }}"

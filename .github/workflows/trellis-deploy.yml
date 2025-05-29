@@ -123,7 +123,7 @@ jobs:
         with:
           ssh-private-key: "${{ secrets.TRELLIS_DEPLOY_SSH_PRIVATE_KEY }}"
 
-      - uses: roots/setup-trellis-cli@v1.3.0
+      - uses: roots/setup-trellis-cli@v1.3.1
         with:
           ansible-vault-password: "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"
           auto-init: "${{ inputs.TRELLIS_CLI_AUTO_INIT }}"

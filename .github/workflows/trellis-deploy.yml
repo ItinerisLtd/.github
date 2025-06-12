@@ -39,6 +39,9 @@ on:
         type: string
         default: latest
         required: false
+      LAST_DEPLOY:
+        type: string
+        required: true
     secrets:
       REPO_PAT:
         required: true
@@ -63,11 +66,13 @@ jobs:
   deploy:
     name: "${{ inputs.TRELLIS_ENVIRONMENT }}"
     runs-on: ubuntu-latest
+    environment:
+      name: "${{ inputs.TRELLIS_ENVIRONMENT }}"
 
     concurrency:
       group: "${{ github.workflow }}-${{ github.ref_name }}"
       cancel-in-progress: false
-    if: github.sha != vars.LAST_DEPLOY && github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]' && !contains(github.event.head_commit.message, '[cd skip]')
+    if: github.sha != inputs.LAST_DEPLOY && github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]' && !contains(github.event.head_commit.message, '[cd skip]')
     steps:
       - name: Checkout Trellis
         uses: actions/checkout@v4
@@ -142,7 +147,7 @@ jobs:
           ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
 
       - name: Cache deployed commit hash
-        run: gh variable set LAST_DEPLOY --body='${{ github.sha }}'
+        run: gh variable set LAST_DEPLOY --env="${{ inputs.TRELLIS_ENVIRONMENT }}" --body='${{ github.sha }}'
         working-directory: bedrock
         env:
           GITHUB_TOKEN: ${{ secrets.REPO_PAT }}

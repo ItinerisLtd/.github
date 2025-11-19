@@ -54,11 +54,11 @@ on:
         required: true
       FONTAWESOME_NPM_AUTH_TOKEN:
         required: false
-      ZEROTIER_CENTRAL_TOKEN:
+      TAILSCALE_OAUTH_CLIENT_ID:
         required: true
-      ZEROTIER_GATEWAY_IP:
+      TAILSCALE_OAUTH_SECRET:
         required: true
-      ZEROTIER_NETWORK_ID:
+      TAILSCALE_EXIT_NODE:
         required: true
 
 jobs:
@@ -69,6 +69,7 @@ jobs:
     concurrency:
       group: "${{ github.workflow }}-${{ github.ref_name }}"
       cancel-in-progress: false
+    # yamllint disable-line rule:line-length
     if: github.sha != vars.LAST_DEPLOY && github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]'
     steps:
       - name: Checkout Trellis
@@ -80,6 +81,7 @@ jobs:
 
       - name: Get environment IP address
         run: |
+          # yamllint disable-line rule:line-length
           HOST_IP="$(grep -Po 'ansible_host=((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}' "hosts/${{ inputs.TRELLIS_ENVIRONMENT }}" | sed 's/ansible_host=//g')"
           if [ -z "${HOST_IP}" ]; then
             echo 'HOST_IP not found.'
@@ -87,15 +89,6 @@ jobs:
           fi
           echo "HOST_IP=${HOST_IP}" >> "${GITHUB_ENV}"
         working-directory: trellis
-
-      - name: Install ZeroTier
-        uses: zerotier/github-action@v1.0.3
-        with:
-          network_id: ${{ secrets.ZEROTIER_NETWORK_ID }}
-          auth_token: ${{ secrets.ZEROTIER_CENTRAL_TOKEN }}
-
-      - name: Route environment traffic through ZeroTier
-        run: sudo ip route add "${HOST_IP}/32" via "${{ secrets.ZEROTIER_GATEWAY_IP }}"
 
       - name: Checkout Site
         uses: actions/checkout@v4
@@ -132,6 +125,15 @@ jobs:
           version: "${{ inputs.TRELLIS_CLI_VERSION }}"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          args: "--exit-node=${{ secrets.TAILSCALE_EXIT_NODE }}"
+          ping: ${{ secrets.TAILSCALE_EXIT_NODE }}
+          tags: tag:ci
+
       - name: Deploy
         working-directory: trellis
         # yamllint disable-line rule:line-length
@@ -139,6 +141,9 @@ jobs:
         env:
           # yamllint disable-line rule:line-length
           FONTAWESOME_NPM_AUTH_TOKEN: "${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}"
+
+      - name: Disconnect from Tailscale
+        run: sudo tailscale down
 
       - name: Cache deployed commit hash
         run: gh variable set LAST_DEPLOY --body='${{ github.sha }}'

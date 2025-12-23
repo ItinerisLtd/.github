@@ -73,7 +73,7 @@ jobs:
     if: github.sha != vars.LAST_DEPLOY && github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]'
     steps:
       - name: Checkout Trellis
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: "${{ inputs.TRELLIS_REPOSITORY }}"
           path: trellis
@@ -91,7 +91,7 @@ jobs:
         working-directory: trellis
 
       - name: Checkout Site
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: site
 

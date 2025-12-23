@@ -36,7 +36,7 @@ jobs:
     outputs:
       THEME_CHANGED: ${{ steps.diff.outputs.THEME_CHANGED }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - id: diff
         run: |
@@ -54,7 +54,7 @@ jobs:
       run:
         working-directory: web/app/themes/${{ inputs.THEME_NAME }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node ${{ inputs.NODE_VERSION }}
         uses: actions/setup-node@v4
@@ -100,7 +100,7 @@ jobs:
       run:
         working-directory: web/app/themes/${{ inputs.THEME_NAME }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup PHP ${{ inputs.PHP_VERSION }}
         uses: shivammathur/setup-php@v2

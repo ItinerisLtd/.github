@@ -40,6 +40,32 @@ automatically close the issue.
 - Link to related FreshDesk ticket
 - Link to related Sentry issue
 - Closes GitHub issue #
+- Links to other related files or URLs
+
+## Changes
+
+<!--
+This is typically populated by an AI agent.
+-->
+
+- [Specific change 1]
+- [Specific change 2]
+- [Specific change 3]
+
+## Impact
+
+<!--
+This is typically populated by an AI agent.
+-->
+
+**Affected areas:**
+- [List affected features/pages/components]
+
+**Breaking changes:**
+- None / [List any breaking changes]
+
+**Database changes:**
+- None / [Describe migrations or schema changes]
 
 ## QA Instructions, Screenshots, Recordings
 

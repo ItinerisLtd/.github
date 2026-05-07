@@ -12,7 +12,7 @@ on:
       PHP_VERSION:
         required: true
         type: string
-      SSH_USERNAME:
+      SSH_USER:
         required: true
         type: string
       SSH_HOST:
@@ -104,18 +104,18 @@ jobs:
       - name: Get current release symlink target
         id: getCurrentRelease
         run: |
-          CURRENT_RELEASE_LINK=$(ssh ${{ inputs.SSH_USERNAME }}@${{ inputs.SSH_HOST }} -p ${{ vars.HOSTING_PORT }} "readlink ~/public || echo ''")
+          CURRENT_RELEASE_LINK=$(ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} "readlink ~/public || echo ''")
           printf 'current_release_link=%s\n' "$CURRENT_RELEASE_LINK" >> "$GITHUB_OUTPUT"
           echo "Current release symlink target: $CURRENT_RELEASE_LINK"
 
       - name: Create Release Dir On Remote
-        run: ssh ${{ inputs.SSH_USERNAME }}@${{ inputs.SSH_HOST }} -p ${{ vars.HOSTING_PORT }} 'mkdir -p ~/deploy/releases/${{ github.sha }}'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/releases/${{ github.sha }}'
 
       - name: Push files to the remote
         run: |
           set -euo pipefail
-          SSH_PORT="${{ vars.HOSTING_PORT }}"
-          SSH_DEST="${{ inputs.SSH_USERNAME }}@${{ inputs.SSH_HOST }}"
+          SSH_PORT="${{ vars.SSH_PORT }}"
+          SSH_DEST="${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }}"
           REMOTE_BASE="~/deploy/releases/${{ github.sha }}"
           RSYNC_COMMON_OPTS="-avz --exclude-from=.deployignore"
           SSH_CMD="ssh -p ${SSH_PORT}"
@@ -129,19 +129,19 @@ jobs:
           rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./favicon.ico "${SSH_DEST}:${REMOTE_BASE}"
 
       - name: Create the shared directory if it doesn't exist
-        run: ssh ${{ inputs.SSH_USERNAME }}@${{ inputs.SSH_HOST }} -p ${{ vars.HOSTING_PORT }} 'mkdir -p ~/deploy/shared'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/shared'
 
       - name: Create the uploads directory if it doesn't exist
-        run: ssh ${{ inputs.SSH_USERNAME }}@${{ inputs.SSH_HOST }} -p ${{ vars.HOSTING_PORT }} 'mkdir -p ~/deploy/shared/uploads'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/shared/uploads'
 
       - name: Symlink uploads directory
-        run: ssh ${{ inputs.SSH_USERNAME }}@${{ inputs.SSH_HOST }} -p ${{ vars.HOSTING_PORT }} 'ln -sfn ~/deploy/shared/uploads ~/deploy/releases/${{ github.sha }}/wp-content/uploads'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ~/deploy/shared/uploads ~/deploy/releases/${{ github.sha }}/wp-content/uploads'
 
       - name: Symlink .env file
-        run: ssh ${{ inputs.SSH_USERNAME }}@${{ inputs.SSH_HOST }} -p ${{ vars.HOSTING_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ github.sha }}/.env'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ github.sha }}/.env'
 
       - name: Promote release symlink
-        run: ssh ${{ inputs.SSH_USERNAME }}@${{ inputs.SSH_HOST }} -p ${{ vars.HOSTING_PORT }} 'ln -sfn ~/deploy/releases/${{ github.sha }} ~/public'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ~/deploy/releases/${{ github.sha }} ~/public'
 
       - name: Check if basic auth is configured
         id: check-basic-auth
@@ -171,12 +171,12 @@ jobs:
 
       - name: Rollback deployment on failure
         if: failure()
-        run: ssh ${{ inputs.SSH_USERNAME }}@${{ inputs.SSH_HOST }} -p ${{ vars.HOSTING_PORT }} 'ln -sfn ${{ steps.getCurrentRelease.outputs.current_release_link }} ~/public && rm -rf ~/deploy/releases/${{ github.sha }}'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ${{ steps.getCurrentRelease.outputs.current_release_link }} ~/public && rm -rf ~/deploy/releases/${{ github.sha }}'
 
       - name: Clear Kinsta site cache if deployment does not fail
         if: success()
-        run: ssh ${{ inputs.SSH_USERNAME }}@${{ inputs.SSH_HOST }} -p ${{ vars.HOSTING_PORT }} 'cd ~/public && wp kinsta cache purge --site'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && wp kinsta cache purge --site'
 
       # Cleanup older deployments (keep only the latest 3)
       - name: Cleanup old deployments
-        run: ssh ${{ inputs.SSH_USERNAME }}@${{ inputs.SSH_HOST }} -p ${{ vars.HOSTING_PORT }} "cd ~/deploy/releases && ls -t | tail -n +4 | xargs -r rm -rf"
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} "cd ~/deploy/releases && ls -t | tail -n +4 | xargs -r rm -rf"

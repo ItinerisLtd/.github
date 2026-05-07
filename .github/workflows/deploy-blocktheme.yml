@@ -1,0 +1,182 @@
+name: Deploy Site to Kinsta (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      ENVIRONMENT:
+        required: true
+        type: string
+      THEME_SLUG:
+        required: true
+        type: string
+      PHP_VERSION:
+        required: true
+        type: string
+      HOSTING_SSH_USERNAME:
+        required: true
+        type: string
+      HOSTING_HOST:
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    environment: ${{ inputs.ENVIRONMENT }}
+
+    concurrency:
+      group: "${{ github.workflow }}-${{ github.ref_name }}"
+      cancel-in-progress: false
+
+    steps:
+      # Check out the repository code
+      - name: Checkout the project
+        uses: actions/checkout@v6
+
+      # Setup Node.js for building JS assets
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ./wp-content/themes/${{ inputs.THEME_SLUG }}/.nvmrc
+          registry-url: "https://npm.pkg.github.com/"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
+
+      # Setup PHP version for Composer dependencies with Privately Hosted Packagist
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.PHP_VERSION }}
+        env:
+          COMPOSER_AUTH_JSON: '{"http-basic": {"repo.packagist.com": {"username": "itineris", "password": "${{ secrets.PRIVATE_PACKAGIST_TOKEN }}"}}}'
+
+      # Cache Composer packages
+      - name: Cache Composer packages
+        id: composer-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-
+
+      # Install npm Dependencies [Theme]
+      - name: Install npm Dependencies [Theme]
+        working-directory: ./wp-content/themes/${{ inputs.THEME_SLUG }}
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
+
+      # Install Dependencies Composer [WordPress]
+      - name: Install Dependencies Composer [WordPress]
+        run: composer install --no-ansi --no-dev --no-interaction --no-progress --optimize-autoloader --no-scripts --classmap-authoritative
+
+      # Install Dependencies Composer [Theme]
+      #- name: Install Dependencies Composer [Theme]
+      #  working-directory: ./wp-content/themes/${{ inputs.THEME_SLUG }}
+      #  run: composer install --no-ansi --no-dev --no-interaction --no-progress --optimize-autoloader --no-scripts --classmap-authoritative
+
+      # Install Dependencies Node [Theme]
+      - name: Build Theme
+        working-directory: ./wp-content/themes/${{ inputs.THEME_SLUG }}
+        run: npm run build
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
+
+      - name: Setup SSH
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_KEY }}
+          known_hosts: ${{ secrets.KNOWN_HOSTS }}
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          args: "--exit-node=${{ secrets.TAILSCALE_EXIT_NODE }}"
+          ping: ${{ secrets.TAILSCALE_EXIT_NODE }}
+          tags: tag:ci
+
+      - name: Get current release symlink target
+        id: getCurrentRelease
+        run: |
+          CURRENT_RELEASE_LINK=$(ssh ${{ inputs.HOSTING_SSH_USERNAME }}@${{ inputs.HOSTING_HOST }} -p ${{ vars.HOSTING_PORT }} "readlink ~/public || echo ''")
+          printf 'current_release_link=%s\n' "$CURRENT_RELEASE_LINK" >> "$GITHUB_OUTPUT"
+          echo "Current release symlink target: $CURRENT_RELEASE_LINK"
+
+      - name: Create Release Dir On Remote
+        run: ssh ${{ inputs.HOSTING_SSH_USERNAME }}@${{ inputs.HOSTING_HOST }} -p ${{ vars.HOSTING_PORT }} 'mkdir -p ~/deploy/releases/${{ github.sha }}'
+
+      - name: Push files to the remote
+        run: |
+          set -euo pipefail
+          SSH_PORT="${{ vars.HOSTING_PORT }}"
+          SSH_DEST="${{ inputs.HOSTING_SSH_USERNAME }}@${{ inputs.HOSTING_HOST }}"
+          REMOTE_BASE="~/deploy/releases/${{ github.sha }}"
+          RSYNC_COMMON_OPTS="-avz --exclude-from=.deployignore"
+          SSH_CMD="ssh -p ${SSH_PORT}"
+
+          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./wp/ "${SSH_DEST}:${REMOTE_BASE}"
+          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./wp-config.php "${SSH_DEST}:${REMOTE_BASE}"
+          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./config "${SSH_DEST}:${REMOTE_BASE}"
+          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./vendor "${SSH_DEST}:${REMOTE_BASE}"
+          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./wp-content "${SSH_DEST}:${REMOTE_BASE}"
+          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./assets "${SSH_DEST}:${REMOTE_BASE}"
+          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./favicon.ico "${SSH_DEST}:${REMOTE_BASE}"
+
+      - name: Create the shared directory if it doesn't exist
+        run: ssh ${{ inputs.HOSTING_SSH_USERNAME }}@${{ inputs.HOSTING_HOST }} -p ${{ vars.HOSTING_PORT }} 'mkdir -p ~/deploy/shared'
+
+      - name: Create the uploads directory if it doesn't exist
+        run: ssh ${{ inputs.HOSTING_SSH_USERNAME }}@${{ inputs.HOSTING_HOST }} -p ${{ vars.HOSTING_PORT }} 'mkdir -p ~/deploy/shared/uploads'
+
+      - name: Symlink uploads directory
+        run: ssh ${{ inputs.HOSTING_SSH_USERNAME }}@${{ inputs.HOSTING_HOST }} -p ${{ vars.HOSTING_PORT }} 'ln -sfn ~/deploy/shared/uploads ~/deploy/releases/${{ github.sha }}/wp-content/uploads'
+
+      - name: Symlink .env file
+        run: ssh ${{ inputs.HOSTING_SSH_USERNAME }}@${{ inputs.HOSTING_HOST }} -p ${{ vars.HOSTING_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ github.sha }}/.env'
+
+      - name: Promote release symlink
+        run: ssh ${{ inputs.HOSTING_SSH_USERNAME }}@${{ inputs.HOSTING_HOST }} -p ${{ vars.HOSTING_PORT }} 'ln -sfn ~/deploy/releases/${{ github.sha }} ~/public'
+
+      - name: Check if basic auth is configured
+        id: check-basic-auth
+        run: |
+          if [ -n "${{ secrets.BASIC_AUTH_PASSWORD }}" ]; then
+            echo "has-basic-auth=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-basic-auth=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Test the new release with smoke test (with basic auth)
+        if: steps.check-basic-auth.outputs.has-basic-auth == 'true'
+        uses: jtalk/url-health-check-action@v4
+        with:
+          url: ${{ vars.SITE_URL }}?nocache
+          max-attempts: 3
+          retry-delay: 10s
+          basic-auth: "${{ secrets.BASIC_AUTH_USERNAME }}:${{ secrets.BASIC_AUTH_PASSWORD }}"
+
+      - name: Test the new release with smoke test (without basic auth)
+        if: steps.check-basic-auth.outputs.has-basic-auth == 'false'
+        uses: jtalk/url-health-check-action@v4
+        with:
+          url: ${{ vars.SITE_URL }}?nocache
+          max-attempts: 3
+          retry-delay: 10s
+
+      - name: Rollback deployment on failure
+        if: failure()
+        run: ssh ${{ inputs.HOSTING_SSH_USERNAME }}@${{ inputs.HOSTING_HOST }} -p ${{ vars.HOSTING_PORT }} 'ln -sfn ${{ steps.getCurrentRelease.outputs.current_release_link }} ~/public && rm -rf ~/deploy/releases/${{ github.sha }}'
+
+      - name: Clear Kinsta site cache if deployment does not fail
+        if: success()
+        run: ssh ${{ inputs.HOSTING_SSH_USERNAME }}@${{ inputs.HOSTING_HOST }} -p ${{ vars.HOSTING_PORT }} 'cd ~/public && wp kinsta cache purge --site'
+
+      # Cleanup older deployments (keep only the latest 3)
+      - name: Cleanup old deployments
+        run: ssh ${{ inputs.HOSTING_SSH_USERNAME }}@${{ inputs.HOSTING_HOST }} -p ${{ vars.HOSTING_PORT }} "cd ~/deploy/releases && ls -t | tail -n +4 | xargs -r rm -rf"

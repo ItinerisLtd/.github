@@ -144,6 +144,13 @@ jobs:
       - name: Symlink .env file
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ github.sha }}/.env'
 
+      - name: Install language packs
+        run: |
+          ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ github.sha }} && \
+          rm -rf wp-content/languages && \
+          wp language core install ${{ inputs.WP_LANG }} && \
+          wp option set WPLANG ${{ inputs.WP_LANG }}'
+
       - name: Promote release symlink
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ~/deploy/releases/${{ github.sha }} ~/public'
 
@@ -181,10 +188,9 @@ jobs:
         if: success()
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && wp kinsta cache purge --site'
 
-      - name: Install language packs
+      - name: Install plugin and theme language packs
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && \
-          wp language core install ${{ inputs.WP_LANG }} --activate && \
           wp language plugin install --all ${{ inputs.WP_LANG }} && \
           wp language theme install --all ${{ inputs.WP_LANG }}'
 

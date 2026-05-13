@@ -141,12 +141,6 @@ jobs:
       - name: Symlink uploads directory
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ~/deploy/shared/uploads ~/deploy/releases/${{ github.sha }}/wp-content/uploads'
 
-      - name: Create the languages directory if it doesn't exist
-        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/shared/languages'
-
-      - name: Symlink languages directory
-        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'rm -rf ~/deploy/releases/${{ github.sha }}/wp-content/languages && ln -sfn ~/deploy/shared/languages ~/deploy/releases/${{ github.sha }}/wp-content/languages'
-
       - name: Symlink .env file
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ github.sha }}/.env'
 
@@ -190,9 +184,9 @@ jobs:
       - name: Install language packs
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && \
-          wp language core is-installed ${{ inputs.WP_LANG }} || wp language core install ${{ inputs.WP_LANG }} --activate && \
-          wp language plugin install --all ${{ inputs.WP_LANG }} --skip-installed && \
-          wp language theme install --all ${{ inputs.WP_LANG }} --skip-installed'
+          wp language core install ${{ inputs.WP_LANG }} --activate && \
+          wp language plugin install --all ${{ inputs.WP_LANG }} && \
+          wp language theme install --all ${{ inputs.WP_LANG }}'
 
       # Cleanup older deployments (keep only the latest 3)
       - name: Cleanup old deployments

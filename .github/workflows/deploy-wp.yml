@@ -18,10 +18,6 @@ on:
       SSH_HOST:
         required: true
         type: string
-      INSTALL_LANGUAGE_PACKS:
-        required: false
-        type: boolean
-        default: false
       WP_LANG:
         required: false
         type: string
@@ -186,15 +182,12 @@ jobs:
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && wp kinsta cache purge --site'
 
       - name: Create shared languages directory
-        if: inputs.INSTALL_LANGUAGE_PACKS
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/shared/languages'
 
       - name: Symlink languages directory
-        if: inputs.INSTALL_LANGUAGE_PACKS
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'rm -rf ~/public/wp-content/languages && ln -sfn ~/deploy/shared/languages ~/public/wp-content/languages'
 
       - name: Install language packs
-        if: inputs.INSTALL_LANGUAGE_PACKS
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && wp language core install ${{ inputs.WP_LANG }} && wp language plugin install --all ${{ inputs.WP_LANG }} && wp language theme install --all ${{ inputs.WP_LANG }}'
 
       # Cleanup older deployments (keep only the latest 3)

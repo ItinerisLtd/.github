@@ -22,7 +22,7 @@ on:
         required: false
         type: boolean
         default: false
-      LANGUAGE_CODE:
+      WP_LANG:
         required: false
         type: string
         default: en_GB
@@ -195,7 +195,7 @@ jobs:
 
       - name: Install language packs
         if: inputs.INSTALL_LANGUAGE_PACKS
-        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && wp language core install ${{ inputs.LANGUAGE_CODE }} && wp language plugin install --all ${{ inputs.LANGUAGE_CODE }} && wp language theme install --all ${{ inputs.LANGUAGE_CODE }}'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && wp language core install ${{ inputs.WP_LANG }} && wp language plugin install --all ${{ inputs.WP_LANG }} && wp language theme install --all ${{ inputs.WP_LANG }}'
 
       # Cleanup older deployments (keep only the latest 3)
       - name: Cleanup old deployments

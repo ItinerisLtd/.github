@@ -52,6 +52,8 @@ on:
         required: false
       ITINERIS_NPM_AUTH_TOKEN:
         required: false
+      ITINERIS_REPO_READ_TOKEN:
+        required: false
       TAILSCALE_OAUTH_CLIENT_ID:
         required: true
       TAILSCALE_OAUTH_SECRET:
@@ -92,6 +94,15 @@ jobs:
         uses: actions/checkout@v6
         with:
           path: bedrock
+          persist-credentials: false
+
+      - name: Configure git auth for org packages
+        run: |
+          if [ -n "${ITINERIS_REPO_READ_TOKEN}" ]; then
+            git config --global url."https://x-access-token:${ITINERIS_REPO_READ_TOKEN}@github.com/ItinerisLtd/".insteadOf "https://github.com/ItinerisLtd/"
+          fi
+        env:
+          ITINERIS_REPO_READ_TOKEN: ${{ secrets.ITINERIS_REPO_READ_TOKEN }}
 
       - name: Setup Node ${{ inputs.NODE_VERSION }}
         uses: actions/setup-node@v6.4.0

@@ -73,7 +73,7 @@ jobs:
     if: github.sha != vars.LAST_DEPLOY && github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]' && !contains(github.event.head_commit.message, '[cd skip]')
     steps:
       - name: Checkout Trellis
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
           repository: "${{ inputs.TRELLIS_REPOSITORY }}"
           path: trellis
@@ -91,7 +91,7 @@ jobs:
         working-directory: trellis
 
       - name: Checkout Bedrock
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
           path: bedrock
           persist-credentials: false

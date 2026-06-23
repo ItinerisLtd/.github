@@ -30,7 +30,7 @@ jobs:
     outputs:
       RADICLE_CHANGED: ${{ steps.diff.outputs.RADICLE_CHANGED }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
       - id: diff
         run: |
@@ -45,7 +45,7 @@ jobs:
     if: ${{ needs.check-theme-changes.outputs.RADICLE_CHANGED == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
       - name: Setup Node ${{ inputs.NODE_VERSION }}
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
@@ -82,7 +82,7 @@ jobs:
     env:
       PRIVATE_PACKAGIST_TOKEN: ${{ secrets.PRIVATE_PACKAGIST_TOKEN }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
       - name: Setup PHP ${{ inputs.PHP_VERSION }}
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240

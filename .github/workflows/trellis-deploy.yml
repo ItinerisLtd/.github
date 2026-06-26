@@ -65,12 +65,16 @@ jobs:
   deploy:
     name: "${{ inputs.TRELLIS_ENVIRONMENT }}"
     runs-on: ubuntu-latest
+    environment: ${{ inputs.TRELLIS_ENVIRONMENT }}
 
     concurrency:
-      group: "${{ github.workflow }}-${{ github.ref_name }}"
+      group: "${{ github.workflow }}-${{ github.ref_name }}-${{ inputs.TRELLIS_ENVIRONMENT }}"
       cancel-in-progress: false
-    # yamllint disable-line rule:line-length
-    if: github.sha != vars.LAST_DEPLOY && github.actor != 'kodiakhq[bot]' && github.actor != 'dependabot[bot]' && !contains(github.event.head_commit.message, '[cd skip]')
+    if: >-
+      github.sha != vars.LAST_DEPLOY
+      && github.actor != 'kodiakhq[bot]'
+      && github.actor != 'dependabot[bot]'
+      && !contains(github.event.head_commit.message, '[cd skip]')
     steps:
       - name: Checkout Trellis
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -158,7 +162,10 @@ jobs:
         run: sudo tailscale down
 
       - name: Cache deployed commit hash
-        run: gh variable set LAST_DEPLOY --body='${{ github.sha }}'
+        run: >-
+          gh variable set LAST_DEPLOY
+          --env '${{ inputs.TRELLIS_ENVIRONMENT }}'
+          --body='${{ github.sha }}'
         working-directory: bedrock
         env:
           GITHUB_TOKEN: ${{ secrets.REPO_PAT }}

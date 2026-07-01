@@ -144,7 +144,21 @@ jobs:
       - name: Symlink .env file
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ github.sha }}/.env'
 
+      # Brand-new sites have no database content yet, so any wp-cli command that reads/writes
+      # site options (language packs, cache purge) would fail. Steps below skip on those sites
+      # until someone completes the WordPress install wizard once; already-installed sites are unaffected.
+      - name: Check if WordPress is already installed
+        id: check-wp-installed
+        run: |
+          if ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ github.sha }} && wp core is-installed'; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "installed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::WordPress isn't installed on this site yet. Skipping language pack install and cache purge until the install wizard has been completed."
+          fi
+
       - name: Install language packs
+        if: steps.check-wp-installed.outputs.installed == 'true'
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ github.sha }} && \
           rm -rf wp-content/languages && \
@@ -185,10 +199,11 @@ jobs:
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ${{ steps.getCurrentRelease.outputs.current_release_link }} ~/public && rm -rf ~/deploy/releases/${{ github.sha }}'
 
       - name: Clear Kinsta site cache if deployment does not fail
-        if: success()
+        if: success() && steps.check-wp-installed.outputs.installed == 'true'
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && wp kinsta cache purge --site'
 
       - name: Install plugin and theme language packs
+        if: steps.check-wp-installed.outputs.installed == 'true'
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && \
           wp language plugin install --all ${{ inputs.WP_LANG }} && \

@@ -144,9 +144,6 @@ jobs:
       - name: Symlink .env file
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ github.sha }}/.env'
 
-      # Brand-new sites have no database content yet, so any wp-cli command that reads/writes
-      # site options (language packs, cache purge) would fail. Steps below skip on those sites
-      # until someone completes the WordPress install wizard once; already-installed sites are unaffected.
       - name: Check if WordPress is already installed
         id: check-wp-installed
         run: |
@@ -154,9 +151,11 @@ jobs:
             echo "installed=true" >> "$GITHUB_OUTPUT"
           else
             echo "installed=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::WordPress isn't installed on this site yet. Skipping language pack install and cache purge until the install wizard has been completed."
+            echo "::warning::WordPress isn't installed on this site yet."
           fi
 
+      # Skipped on brand-new sites: wp-cli can't manage language packs until
+      # someone completes the WordPress install wizard once.
       - name: Install language packs
         if: steps.check-wp-installed.outputs.installed == 'true'
         run: |
@@ -198,10 +197,13 @@ jobs:
         if: failure()
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ${{ steps.getCurrentRelease.outputs.current_release_link }} ~/public && rm -rf ~/deploy/releases/${{ github.sha }}'
 
+      # Skipped on brand-new sites: nothing to purge until WordPress is installed.
       - name: Clear Kinsta site cache if deployment does not fail
         if: success() && steps.check-wp-installed.outputs.installed == 'true'
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && wp kinsta cache purge --site'
 
+      # Skipped on brand-new sites: wp-cli can't manage language packs until
+      # someone completes the WordPress install wizard once.
       - name: Install plugin and theme language packs
         if: steps.check-wp-installed.outputs.installed == 'true'
         run: |

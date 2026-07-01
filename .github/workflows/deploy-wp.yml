@@ -144,6 +144,25 @@ jobs:
       - name: Symlink .env file
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ github.sha }}/.env'
 
+      # No-op if the site is already installed; only bootstraps a brand-new, never-installed site.
+      - name: Bootstrap WordPress core install if the site doesn't exist yet
+        run: |
+          ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} '
+            set -e
+            cd ~/deploy/releases/${{ github.sha }}
+            if wp core is-installed; then
+              echo "WordPress is already installed, skipping bootstrap."
+            else
+              wp core install \
+                --url="${{ vars.SITE_URL }}" \
+                --title="${{ inputs.THEME_SLUG }}" \
+                --admin_user="${{ secrets.WP_ADMIN_USER }}" \
+                --admin_password="${{ secrets.WP_ADMIN_PASSWORD }}" \
+                --admin_email="${{ secrets.WP_ADMIN_EMAIL }}" \
+                --skip-email
+            fi
+          '
+
       - name: Install language packs
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ github.sha }} && \

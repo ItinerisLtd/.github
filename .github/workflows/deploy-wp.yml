@@ -1,0 +1,219 @@
+name: Deploy Site to Kinsta (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      ENVIRONMENT:
+        required: true
+        type: string
+      THEME_SLUG:
+        required: true
+        type: string
+      PHP_VERSION:
+        required: true
+        type: string
+      SSH_USER:
+        required: true
+        type: string
+      SSH_HOST:
+        required: true
+        type: string
+      WP_LANG:
+        required: false
+        type: string
+        default: en_GB
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    environment: ${{ inputs.ENVIRONMENT }}
+
+    concurrency:
+      group: "${{ github.workflow }}-${{ github.ref_name }}"
+      cancel-in-progress: false
+
+    steps:
+      # Check out the repository code
+      - name: Checkout the project
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      # Setup Node.js for building JS assets
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version-file: ./wp-content/themes/${{ inputs.THEME_SLUG }}/.nvmrc
+          registry-url: "https://npm.pkg.github.com/"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
+
+      # Setup PHP version for Composer dependencies with Privately Hosted Packagist
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: ${{ inputs.PHP_VERSION }}
+        env:
+          COMPOSER_AUTH_JSON: '{"http-basic": {"repo.packagist.com": {"username": "itineris", "password": "${{ secrets.PRIVATE_PACKAGIST_TOKEN }}"}}}'
+
+      # Cache Composer packages
+      - name: Cache Composer packages
+        id: composer-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-composer-
+
+      # Install npm Dependencies [Theme]
+      - name: Install npm Dependencies [Theme]
+        working-directory: ./wp-content/themes/${{ inputs.THEME_SLUG }}
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
+
+      # Install Dependencies Composer [WordPress]
+      - name: Install Dependencies Composer [WordPress]
+        run: composer install --no-ansi --no-dev --no-interaction --no-progress --optimize-autoloader --no-scripts --classmap-authoritative
+
+      # Install Dependencies Composer [Theme]
+      #- name: Install Dependencies Composer [Theme]
+      #  working-directory: ./wp-content/themes/${{ inputs.THEME_SLUG }}
+      #  run: composer install --no-ansi --no-dev --no-interaction --no-progress --optimize-autoloader --no-scripts --classmap-authoritative
+
+      # Install Dependencies Node [Theme]
+      - name: Build Theme
+        working-directory: ./wp-content/themes/${{ inputs.THEME_SLUG }}
+        run: npm run build
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
+
+      - name: Setup SSH
+        uses: shimataro/ssh-key-action@87a8f067114a8ce263df83e9ed5c849953548bc3
+        with:
+          key: ${{ secrets.SSH_KEY }}
+          known_hosts: ${{ secrets.KNOWN_HOSTS }}
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          args: "--exit-node=${{ secrets.TAILSCALE_EXIT_NODE }}"
+          ping: ${{ secrets.TAILSCALE_EXIT_NODE }}
+          tags: tag:ci
+
+      - name: Get current release symlink target
+        id: getCurrentRelease
+        run: |
+          CURRENT_RELEASE_LINK=$(ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} "readlink ~/public || echo ''")
+          printf 'current_release_link=%s\n' "$CURRENT_RELEASE_LINK" >> "$GITHUB_OUTPUT"
+          echo "Current release symlink target: $CURRENT_RELEASE_LINK"
+
+      - name: Create Release Dir On Remote
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/releases/${{ github.sha }}'
+
+      - name: Push files to the remote
+        run: |
+          set -euo pipefail
+          SSH_PORT="${{ vars.SSH_PORT }}"
+          SSH_DEST="${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }}"
+          REMOTE_BASE="~/deploy/releases/${{ github.sha }}"
+          RSYNC_COMMON_OPTS="-avz --exclude-from=.deployignore"
+          SSH_CMD="ssh -p ${SSH_PORT}"
+
+          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./wp/ "${SSH_DEST}:${REMOTE_BASE}"
+          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./wp-config.php "${SSH_DEST}:${REMOTE_BASE}"
+          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./config "${SSH_DEST}:${REMOTE_BASE}"
+          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./vendor "${SSH_DEST}:${REMOTE_BASE}"
+          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./wp-content "${SSH_DEST}:${REMOTE_BASE}"
+          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./assets "${SSH_DEST}:${REMOTE_BASE}"
+          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./favicon.ico "${SSH_DEST}:${REMOTE_BASE}"
+
+      - name: Create the shared directory if it doesn't exist
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/shared'
+
+      - name: Create the uploads directory if it doesn't exist
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/shared/uploads'
+
+      - name: Symlink uploads directory
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ~/deploy/shared/uploads ~/deploy/releases/${{ github.sha }}/wp-content/uploads'
+
+      - name: Symlink .env file
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ github.sha }}/.env'
+
+      - name: Symlink Wordfence WAF file
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/wordfence-waf.php && ln -sfn ~/deploy/shared/wordfence-waf.php ~/deploy/releases/${{ github.sha }}/wordfence-waf.php'
+
+      - name: Check if WordPress is already installed
+        id: check-wp-installed
+        run: |
+          if ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ github.sha }} && wp core is-installed'; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "installed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::WordPress isn't installed on this site yet."
+          fi
+
+      # Skipped on brand-new sites: wp-cli can't manage language packs until
+      # someone completes the WordPress install wizard once.
+      - name: Install language packs
+        if: steps.check-wp-installed.outputs.installed == 'true'
+        run: |
+          ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ github.sha }} && \
+          rm -rf wp-content/languages && \
+          wp --skip-plugins --skip-themes language core install ${{ inputs.WP_LANG }} && \
+          wp --skip-plugins --skip-themes option set WPLANG ${{ inputs.WP_LANG }}'
+
+      - name: Promote release symlink
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ~/deploy/releases/${{ github.sha }} ~/public'
+
+      - name: Check if basic auth is configured
+        id: check-basic-auth
+        run: |
+          if [ -n "${{ secrets.BASIC_AUTH_PASSWORD }}" ]; then
+            echo "has-basic-auth=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-basic-auth=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Test the new release with smoke test (with basic auth)
+        if: steps.check-basic-auth.outputs.has-basic-auth == 'true'
+        uses: jtalk/url-health-check-action@b716ccb6645355dd9fcce8002ce460e5474f7f00
+        with:
+          url: ${{ vars.SITE_URL }}?nocache
+          max-attempts: 3
+          retry-delay: 10s
+          basic-auth: "${{ secrets.BASIC_AUTH_USERNAME }}:${{ secrets.BASIC_AUTH_PASSWORD }}"
+
+      - name: Test the new release with smoke test (without basic auth)
+        if: steps.check-basic-auth.outputs.has-basic-auth == 'false'
+        uses: jtalk/url-health-check-action@b716ccb6645355dd9fcce8002ce460e5474f7f00
+        with:
+          url: ${{ vars.SITE_URL }}?nocache
+          max-attempts: 3
+          retry-delay: 10s
+
+      - name: Rollback deployment on failure
+        if: failure()
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ${{ steps.getCurrentRelease.outputs.current_release_link }} ~/public && rm -rf ~/deploy/releases/${{ github.sha }}'
+
+      # Skipped on brand-new sites: nothing to purge until WordPress is installed.
+      - name: Clear Kinsta site cache if deployment does not fail
+        if: success() && steps.check-wp-installed.outputs.installed == 'true'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && wp --skip-plugins --skip-themes kinsta cache purge --site'
+
+      # Skipped on brand-new sites: wp-cli can't manage language packs until
+      # someone completes the WordPress install wizard once.
+      - name: Install plugin and theme language packs
+        if: steps.check-wp-installed.outputs.installed == 'true'
+        run: |
+          ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && \
+          wp --skip-plugins --skip-themes language plugin install --all ${{ inputs.WP_LANG }} && \
+          wp --skip-plugins --skip-themes language theme install --all ${{ inputs.WP_LANG }}'
+
+      # Cleanup older deployments (keep only the latest 3)
+      - name: Cleanup old deployments
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} "cd ~/deploy/releases && ls -t | tail -n +4 | xargs -r rm -rf"

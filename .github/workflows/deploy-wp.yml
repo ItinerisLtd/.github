@@ -144,6 +144,9 @@ jobs:
       - name: Symlink .env file
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ github.sha }}/.env'
 
+      - name: Symlink Wordfence WAF file
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/wordfence-waf.php && ln -sfn ~/deploy/shared/wordfence-waf.php ~/deploy/releases/${{ github.sha }}/wordfence-waf.php'
+
       - name: Check if WordPress is already installed
         id: check-wp-installed
         run: |
@@ -161,8 +164,8 @@ jobs:
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ github.sha }} && \
           rm -rf wp-content/languages && \
-          wp language core install ${{ inputs.WP_LANG }} && \
-          wp option set WPLANG ${{ inputs.WP_LANG }}'
+          wp --skip-plugins --skip-themes language core install ${{ inputs.WP_LANG }} && \
+          wp --skip-plugins --skip-themes option set WPLANG ${{ inputs.WP_LANG }}'
 
       - name: Promote release symlink
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ~/deploy/releases/${{ github.sha }} ~/public'
@@ -200,7 +203,7 @@ jobs:
       # Skipped on brand-new sites: nothing to purge until WordPress is installed.
       - name: Clear Kinsta site cache if deployment does not fail
         if: success() && steps.check-wp-installed.outputs.installed == 'true'
-        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && wp kinsta cache purge --site'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && wp --skip-plugins --skip-themes kinsta cache purge --site'
 
       # Skipped on brand-new sites: wp-cli can't manage language packs until
       # someone completes the WordPress install wizard once.
@@ -208,8 +211,8 @@ jobs:
         if: steps.check-wp-installed.outputs.installed == 'true'
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && \
-          wp language plugin install --all ${{ inputs.WP_LANG }} && \
-          wp language theme install --all ${{ inputs.WP_LANG }}'
+          wp --skip-plugins --skip-themes language plugin install --all ${{ inputs.WP_LANG }} && \
+          wp --skip-plugins --skip-themes language theme install --all ${{ inputs.WP_LANG }}'
 
       # Cleanup older deployments (keep only the latest 3)
       - name: Cleanup old deployments

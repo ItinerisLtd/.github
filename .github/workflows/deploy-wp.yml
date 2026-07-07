@@ -129,8 +129,16 @@ jobs:
           rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./config "${SSH_DEST}:${REMOTE_BASE}"
           rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./vendor "${SSH_DEST}:${REMOTE_BASE}"
           rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./wp-content "${SSH_DEST}:${REMOTE_BASE}"
-          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./assets "${SSH_DEST}:${REMOTE_BASE}"
-          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./favicon.ico "${SSH_DEST}:${REMOTE_BASE}"
+
+          # Conditionally sync assets folder if it exists
+          if [[ -d ./assets ]]; then
+            rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./assets "${SSH_DEST}:${REMOTE_BASE}"
+          fi
+
+          # Conditionally sync favicon if it exists
+          if [[ -f ./favicon.ico ]]; then
+            rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./favicon.ico "${SSH_DEST}:${REMOTE_BASE}"
+          fi
 
       - name: Create the shared directory if it doesn't exist
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/shared'

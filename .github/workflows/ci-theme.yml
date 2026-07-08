@@ -38,7 +38,7 @@ jobs:
     outputs:
       THEME_CHANGED: ${{ steps.diff.outputs.THEME_CHANGED }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - id: diff
         run: |
@@ -56,7 +56,7 @@ jobs:
       run:
         working-directory: web/app/themes/${{ inputs.THEME_NAME }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           persist-credentials: false
 
@@ -112,7 +112,7 @@ jobs:
       run:
         working-directory: web/app/themes/${{ inputs.THEME_NAME }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - name: Setup PHP ${{ inputs.PHP_VERSION }}
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240

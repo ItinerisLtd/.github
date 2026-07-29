@@ -153,7 +153,7 @@ jobs:
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ github.sha }}/.env'
 
       - name: Symlink Wordfence WAF file
-        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/wordfence-waf.php && ln -sfn ~/deploy/shared/wordfence-waf.php ~/deploy/releases/${{ github.sha }}/wordfence-waf.php'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cp ~/deploy/shared/wordfence-waf.php ~/deploy/releases/${{ github.sha }}/wordfence-waf.php'
 
       - name: Check if WordPress is already installed
         id: check-wp-installed

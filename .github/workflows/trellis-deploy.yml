@@ -60,6 +60,10 @@ on:
         required: true
       TAILSCALE_EXIT_NODE:
         required: true
+      OPCACHE_PURGE_TOKEN:
+        required: false
+      OPCACHE_PURGE_USER_AGENT:
+        required: false
 
 jobs:
   deploy:
@@ -157,6 +161,39 @@ jobs:
           # yamllint disable-line rule:line-length
           FONTAWESOME_NPM_AUTH_TOKEN: "${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}"
           ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
+
+      - name: Reset OPcache
+        working-directory: trellis
+        env:
+          OPCACHE_PURGE_TOKEN: ${{ secrets.OPCACHE_PURGE_TOKEN }}
+          OPCACHE_PURGE_USER_AGENT: ${{ secrets.OPCACHE_PURGE_USER_AGENT }}
+          TRELLIS_ENVIRONMENT: ${{ inputs.TRELLIS_ENVIRONMENT }}
+        run: |
+          if [ -z "${OPCACHE_PURGE_TOKEN}" ]; then
+            echo 'OPCACHE_PURGE_TOKEN not configured - skipping OPcache reset.'
+            exit 0
+          fi
+          HOSTS="$(python3 -c '
+          import os, yaml
+          env = os.environ["TRELLIS_ENVIRONMENT"]
+          with open(f"group_vars/{env}/wordpress_sites.yml") as f:
+              sites = yaml.safe_load(f).get("wordpress_sites") or {}
+          for site in sites.values():
+              hosts = site.get("site_hosts") or []
+              if hosts and hosts[0].get("canonical"):
+                  print(hosts[0]["canonical"])
+          ')"
+          for HOST in ${HOSTS}; do
+            BODY="$(curl --silent --max-time 30 \
+              --user-agent "${OPCACHE_PURGE_USER_AGENT:-ItinerisServer/1.0}" \
+              --header "X-Opcache-Purge: ${OPCACHE_PURGE_TOKEN}" \
+              "https://${HOST}/?opcache_purge=deploy-${GITHUB_SHA}" || true)"
+            if printf '%s' "${BODY}" | grep -q '"reset":true'; then
+              echo "OPcache reset: OK (${HOST})"
+            else
+              echo "::warning::OPcache purge not confirmed for ${HOST} (mu-plugin missing, token mismatch, or edge block). Deploy unaffected."
+            fi
+          done
 
       - name: Disconnect from Tailscale
         run: sudo tailscale down

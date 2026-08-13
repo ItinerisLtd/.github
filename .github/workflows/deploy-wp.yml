@@ -146,14 +146,17 @@ jobs:
       - name: Create the uploads directory if it doesn't exist
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/shared/uploads'
 
+      # rm first: ln -sfn cannot replace a real directory (e.g. a committed uploads/.gitkeep)
       - name: Symlink uploads directory
-        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ~/deploy/shared/uploads ~/deploy/releases/${{ github.sha }}/wp-content/uploads'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'rm -rf ~/deploy/releases/${{ github.sha }}/wp-content/uploads && ln -sfn ~/deploy/shared/uploads ~/deploy/releases/${{ github.sha }}/wp-content/uploads'
 
       - name: Symlink .env file
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ github.sha }}/.env'
 
-      - name: Symlink Wordfence WAF file
-        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cp ~/deploy/shared/wordfence-waf.php ~/deploy/releases/${{ github.sha }}/wordfence-waf.php'
+      # Copied, not symlinked: Wordfence does not support symlinks. Skipped when the
+      # shared file doesn't exist yet (brand-new sites).
+      - name: Copy Wordfence WAF file
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'if [ -f ~/deploy/shared/wordfence-waf.php ]; then cp ~/deploy/shared/wordfence-waf.php ~/deploy/releases/${{ github.sha }}/wordfence-waf.php; else echo "No shared wordfence-waf.php yet - skipping."; fi'
 
       - name: Check if WordPress is already installed
         id: check-wp-installed
@@ -172,8 +175,8 @@ jobs:
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ github.sha }} && \
           rm -rf wp-content/languages && \
-          wp --skip-plugins --skip-themes language core install ${{ inputs.WP_LANG }} && \
-          wp --skip-plugins --skip-themes option set WPLANG ${{ inputs.WP_LANG }}'
+          wp --skip-plugins --skip-themes language core install "${{ inputs.WP_LANG }}" && \
+          wp --skip-plugins --skip-themes option set WPLANG "${{ inputs.WP_LANG }}"'
 
       - name: Promote release symlink
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ~/deploy/releases/${{ github.sha }} ~/public'
@@ -204,9 +207,20 @@ jobs:
           max-attempts: 3
           retry-delay: 10s
 
+      # On a first deploy there is no previous release: skip the relink but still
+      # remove the failed release directory.
       - name: Rollback deployment on failure
         if: failure()
-        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ${{ steps.getCurrentRelease.outputs.current_release_link }} ~/public && rm -rf ~/deploy/releases/${{ github.sha }}'
+        run: |
+          ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} '
+            PREVIOUS_RELEASE="${{ steps.getCurrentRelease.outputs.current_release_link }}"
+            if [ -n "$PREVIOUS_RELEASE" ]; then
+              ln -sfn "$PREVIOUS_RELEASE" ~/public
+            else
+              echo "No previous release to roll back to."
+            fi
+            rm -rf ~/deploy/releases/${{ github.sha }}
+          '
 
       # Skipped on brand-new sites: nothing to purge until WordPress is installed.
       - name: Clear Kinsta site cache if deployment does not fail
@@ -219,8 +233,8 @@ jobs:
         if: steps.check-wp-installed.outputs.installed == 'true'
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && \
-          wp --skip-plugins --skip-themes language plugin install --all ${{ inputs.WP_LANG }} && \
-          wp --skip-plugins --skip-themes language theme install --all ${{ inputs.WP_LANG }}'
+          wp --skip-plugins --skip-themes language plugin install --all "${{ inputs.WP_LANG }}" && \
+          wp --skip-plugins --skip-themes language theme install --all "${{ inputs.WP_LANG }}"'
 
       # Cleanup older deployments (keep only the latest 3)
       - name: Cleanup old deployments

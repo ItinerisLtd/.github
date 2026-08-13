@@ -1,4 +1,4 @@
-name: Deploy Site to Kinsta (Reusable)
+name: Deploy Site
 
 on:
   workflow_call:
@@ -29,9 +29,6 @@ jobs:
 
     environment: ${{ inputs.ENVIRONMENT }}
 
-    # Unique per attempt: keying on the sha alone would reuse (and on failed
-    # re-runs of the live commit, delete) the release directory production is
-    # currently serving from.
     env:
       RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
@@ -40,11 +37,9 @@ jobs:
       cancel-in-progress: false
 
     steps:
-      # Check out the repository code
       - name: Checkout the project
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
-      # Setup Node.js for building JS assets
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version-file: ./wp-content/themes/${{ inputs.THEME_SLUG }}/.nvmrc
@@ -53,7 +48,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
 
-      # Setup PHP version for Composer dependencies with Privately Hosted Packagist
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
@@ -61,7 +55,6 @@ jobs:
         env:
           COMPOSER_AUTH_JSON: '{"http-basic": {"repo.packagist.com": {"username": "itineris", "password": "${{ secrets.PRIVATE_PACKAGIST_TOKEN }}"}}}'
 
-      # Cache Composer packages
       - name: Cache Composer packages
         id: composer-cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
@@ -71,7 +64,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-php-composer-
 
-      # Install npm Dependencies [Theme]
       - name: Install npm Dependencies [Theme]
         working-directory: ./wp-content/themes/${{ inputs.THEME_SLUG }}
         run: npm ci
@@ -79,16 +71,9 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
 
-      # Install Dependencies Composer [WordPress]
       - name: Install Dependencies Composer [WordPress]
         run: composer install --no-ansi --no-dev --no-interaction --no-progress --optimize-autoloader --no-scripts --classmap-authoritative
 
-      # Install Dependencies Composer [Theme]
-      #- name: Install Dependencies Composer [Theme]
-      #  working-directory: ./wp-content/themes/${{ inputs.THEME_SLUG }}
-      #  run: composer install --no-ansi --no-dev --no-interaction --no-progress --optimize-autoloader --no-scripts --classmap-authoritative
-
-      # Install Dependencies Node [Theme]
       - name: Build Theme
         working-directory: ./wp-content/themes/${{ inputs.THEME_SLUG }}
         run: npm run build
@@ -136,12 +121,10 @@ jobs:
           rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./vendor "${SSH_DEST}:${REMOTE_BASE}"
           rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./wp-content "${SSH_DEST}:${REMOTE_BASE}"
 
-          # Conditionally sync assets folder if it exists
           if [[ -d ./assets ]]; then
             rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./assets "${SSH_DEST}:${REMOTE_BASE}"
           fi
 
-          # Conditionally sync favicon if it exists
           if [[ -f ./favicon.ico ]]; then
             rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./favicon.ico "${SSH_DEST}:${REMOTE_BASE}"
           fi
@@ -152,15 +135,12 @@ jobs:
       - name: Create the uploads directory if it doesn't exist
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/shared/uploads'
 
-      # rm first: ln -sfn cannot replace a real directory (e.g. a committed uploads/.gitkeep)
       - name: Symlink uploads directory
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'rm -rf ~/deploy/releases/${{ env.RELEASE_ID }}/wp-content/uploads && ln -sfn ~/deploy/shared/uploads ~/deploy/releases/${{ env.RELEASE_ID }}/wp-content/uploads'
 
       - name: Symlink .env file
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ env.RELEASE_ID }}/.env'
 
-      # Copied, not symlinked: Wordfence does not support symlinks. Skipped when the
-      # shared file doesn't exist yet (brand-new sites).
       - name: Copy Wordfence WAF file
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'if [ -f ~/deploy/shared/wordfence-waf.php ]; then cp ~/deploy/shared/wordfence-waf.php ~/deploy/releases/${{ env.RELEASE_ID }}/wordfence-waf.php; else echo "No shared wordfence-waf.php yet - skipping."; fi'
 
@@ -174,8 +154,6 @@ jobs:
             echo "::warning::WordPress isn't installed on this site yet."
           fi
 
-      # Skipped on brand-new sites: wp-cli can't manage language packs until
-      # someone completes the WordPress install wizard once.
       - name: Install language packs
         if: steps.check-wp-installed.outputs.installed == 'true'
         run: |
@@ -213,8 +191,6 @@ jobs:
           max-attempts: 3
           retry-delay: 10s
 
-      # On a first deploy there is no previous release: skip the relink but still
-      # remove the failed release directory.
       - name: Rollback deployment on failure
         if: failure()
         run: |
@@ -228,9 +204,6 @@ jobs:
             rm -rf ~/deploy/releases/${{ env.RELEASE_ID }}
           '
 
-      # Fail-safe: warns but never fails the deploy. Atomic deploys leave OPcache
-      # full of stale release paths; the itineris-opcache-purge mu-plugin resets it
-      # when the request carries a token matching the committed fingerprint.
       - name: Reset OPcache
         if: success()
         env:
@@ -259,13 +232,10 @@ jobs:
             echo "::warning::OPcache purge not confirmed (mu-plugin missing, token mismatch, or edge block). Deploy unaffected."
           fi
 
-      # Skipped on brand-new sites: nothing to purge until WordPress is installed.
       - name: Clear Kinsta site cache if deployment does not fail
         if: success() && steps.check-wp-installed.outputs.installed == 'true'
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && wp --skip-plugins --skip-themes kinsta cache purge --site'
 
-      # Skipped on brand-new sites: wp-cli can't manage language packs until
-      # someone completes the WordPress install wizard once.
       - name: Install plugin and theme language packs
         if: steps.check-wp-installed.outputs.installed == 'true'
         run: |
@@ -273,6 +243,5 @@ jobs:
           wp --skip-plugins --skip-themes language plugin install --all "${{ inputs.WP_LANG }}" && \
           wp --skip-plugins --skip-themes language theme install --all "${{ inputs.WP_LANG }}"'
 
-      # Cleanup older deployments (keep only the latest 3)
       - name: Cleanup old deployments
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} "cd ~/deploy/releases && ls -t | tail -n +4 | xargs -r rm -rf"

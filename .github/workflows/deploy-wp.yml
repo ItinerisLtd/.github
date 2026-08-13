@@ -222,6 +222,37 @@ jobs:
             rm -rf ~/deploy/releases/${{ github.sha }}
           '
 
+      # Fail-safe: warns but never fails the deploy. Atomic deploys leave OPcache
+      # full of stale release paths; the itineris-opcache-purge mu-plugin resets it
+      # when the request carries a token matching the committed fingerprint.
+      - name: Reset OPcache
+        if: success()
+        env:
+          OPCACHE_PURGE_TOKEN: ${{ secrets.OPCACHE_PURGE_TOKEN }}
+          OPCACHE_PURGE_USER_AGENT: ${{ secrets.OPCACHE_PURGE_USER_AGENT }}
+          SITE_URL: ${{ vars.SITE_URL }}
+          BASIC_AUTH_USERNAME: ${{ secrets.BASIC_AUTH_USERNAME }}
+          BASIC_AUTH_PASSWORD: ${{ secrets.BASIC_AUTH_PASSWORD }}
+        run: |
+          if [ -z "${OPCACHE_PURGE_TOKEN}" ]; then
+            echo 'OPCACHE_PURGE_TOKEN not configured - skipping OPcache reset.'
+            exit 0
+          fi
+          CURL_AUTH=()
+          if [ -n "${BASIC_AUTH_PASSWORD}" ]; then
+            CURL_AUTH=(--user "${BASIC_AUTH_USERNAME}:${BASIC_AUTH_PASSWORD}")
+          fi
+          BODY="$(curl --silent --max-time 30 \
+            "${CURL_AUTH[@]}" \
+            --user-agent "${OPCACHE_PURGE_USER_AGENT:-ItinerisServer/1.0}" \
+            --header "X-Opcache-Purge: ${OPCACHE_PURGE_TOKEN}" \
+            "${SITE_URL}?opcache_purge=deploy-${GITHUB_SHA}" || true)"
+          if printf '%s' "${BODY}" | grep -q '"reset":true'; then
+            echo "OPcache reset: OK"
+          else
+            echo "::warning::OPcache purge not confirmed (mu-plugin missing, token mismatch, or edge block). Deploy unaffected."
+          fi
+
       # Skipped on brand-new sites: nothing to purge until WordPress is installed.
       - name: Clear Kinsta site cache if deployment does not fail
         if: success() && steps.check-wp-installed.outputs.installed == 'true'

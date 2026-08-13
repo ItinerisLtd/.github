@@ -29,6 +29,12 @@ jobs:
 
     environment: ${{ inputs.ENVIRONMENT }}
 
+    # Unique per attempt: keying on the sha alone would reuse (and on failed
+    # re-runs of the live commit, delete) the release directory production is
+    # currently serving from.
+    env:
+      RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+
     concurrency:
       group: "${{ github.workflow }}-${{ github.ref_name }}"
       cancel-in-progress: false
@@ -113,14 +119,14 @@ jobs:
           echo "Current release symlink target: $CURRENT_RELEASE_LINK"
 
       - name: Create Release Dir On Remote
-        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/releases/${{ github.sha }}'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/releases/${{ env.RELEASE_ID }}'
 
       - name: Push files to the remote
         run: |
           set -euo pipefail
           SSH_PORT="${{ vars.SSH_PORT }}"
           SSH_DEST="${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }}"
-          REMOTE_BASE="~/deploy/releases/${{ github.sha }}"
+          REMOTE_BASE="~/deploy/releases/${{ env.RELEASE_ID }}"
           RSYNC_COMMON_OPTS="-avz --exclude-from=.deployignore"
           SSH_CMD="ssh -p ${SSH_PORT}"
 
@@ -148,20 +154,20 @@ jobs:
 
       # rm first: ln -sfn cannot replace a real directory (e.g. a committed uploads/.gitkeep)
       - name: Symlink uploads directory
-        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'rm -rf ~/deploy/releases/${{ github.sha }}/wp-content/uploads && ln -sfn ~/deploy/shared/uploads ~/deploy/releases/${{ github.sha }}/wp-content/uploads'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'rm -rf ~/deploy/releases/${{ env.RELEASE_ID }}/wp-content/uploads && ln -sfn ~/deploy/shared/uploads ~/deploy/releases/${{ env.RELEASE_ID }}/wp-content/uploads'
 
       - name: Symlink .env file
-        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ github.sha }}/.env'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ env.RELEASE_ID }}/.env'
 
       # Copied, not symlinked: Wordfence does not support symlinks. Skipped when the
       # shared file doesn't exist yet (brand-new sites).
       - name: Copy Wordfence WAF file
-        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'if [ -f ~/deploy/shared/wordfence-waf.php ]; then cp ~/deploy/shared/wordfence-waf.php ~/deploy/releases/${{ github.sha }}/wordfence-waf.php; else echo "No shared wordfence-waf.php yet - skipping."; fi'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'if [ -f ~/deploy/shared/wordfence-waf.php ]; then cp ~/deploy/shared/wordfence-waf.php ~/deploy/releases/${{ env.RELEASE_ID }}/wordfence-waf.php; else echo "No shared wordfence-waf.php yet - skipping."; fi'
 
       - name: Check if WordPress is already installed
         id: check-wp-installed
         run: |
-          if ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ github.sha }} && wp core is-installed'; then
+          if ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ env.RELEASE_ID }} && wp core is-installed'; then
             echo "installed=true" >> "$GITHUB_OUTPUT"
           else
             echo "installed=false" >> "$GITHUB_OUTPUT"
@@ -173,13 +179,13 @@ jobs:
       - name: Install language packs
         if: steps.check-wp-installed.outputs.installed == 'true'
         run: |
-          ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ github.sha }} && \
+          ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ env.RELEASE_ID }} && \
           rm -rf wp-content/languages && \
           wp --skip-plugins --skip-themes language core install "${{ inputs.WP_LANG }}" && \
           wp --skip-plugins --skip-themes option set WPLANG "${{ inputs.WP_LANG }}"'
 
       - name: Promote release symlink
-        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ~/deploy/releases/${{ github.sha }} ~/public'
+        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ~/deploy/releases/${{ env.RELEASE_ID }} ~/public'
 
       - name: Check if basic auth is configured
         id: check-basic-auth
@@ -219,7 +225,7 @@ jobs:
             else
               echo "No previous release to roll back to."
             fi
-            rm -rf ~/deploy/releases/${{ github.sha }}
+            rm -rf ~/deploy/releases/${{ env.RELEASE_ID }}
           '
 
       # Fail-safe: warns but never fails the deploy. Atomic deploys leave OPcache

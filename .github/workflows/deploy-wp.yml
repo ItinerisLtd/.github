@@ -176,7 +176,7 @@ jobs:
 
       - name: Test the new release with smoke test (with basic auth)
         if: steps.check-basic-auth.outputs.has-basic-auth == 'true'
-        uses: jtalk/url-health-check-action@b716ccb6645355dd9fcce8002ce460e5474f7f00
+        uses: jtalk/url-health-check-action@e7d5ebdc9027fbf494d2d034f3e8fc78f8b7a2b9
         with:
           url: ${{ vars.SITE_URL }}?nocache
           max-attempts: 3
@@ -185,7 +185,7 @@ jobs:
 
       - name: Test the new release with smoke test (without basic auth)
         if: steps.check-basic-auth.outputs.has-basic-auth == 'false'
-        uses: jtalk/url-health-check-action@b716ccb6645355dd9fcce8002ce460e5474f7f00
+        uses: jtalk/url-health-check-action@e7d5ebdc9027fbf494d2d034f3e8fc78f8b7a2b9
         with:
           url: ${{ vars.SITE_URL }}?nocache
           max-attempts: 3

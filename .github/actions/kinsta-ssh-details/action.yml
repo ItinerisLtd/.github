@@ -1,0 +1,33 @@
+---
+name: kinsta-ssh-details
+description: Read the SSH connection details for an environment
+inputs:
+  SITE_ID:
+    required: true
+  ENVIRONMENT_ID:
+    required: true
+  ENVIRONMENT:
+    required: true
+  KINSTA_API_URL:
+    required: true
+  KINSTA_API_KEY:
+    required: true
+outputs:
+  SSH_USER:
+    value: ${{ steps.run.outputs.SSH_USER }}
+  SSH_HOST:
+    value: ${{ steps.run.outputs.SSH_HOST }}
+  SSH_PORT:
+    value: ${{ steps.run.outputs.SSH_PORT }}
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      run: bash "${{ github.action_path }}/run.sh"
+      env:
+        INPUT_SITE_ID: ${{ inputs.SITE_ID }}
+        INPUT_ENVIRONMENT_ID: ${{ inputs.ENVIRONMENT_ID }}
+        INPUT_ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+        INPUT_KINSTA_API_URL: ${{ inputs.KINSTA_API_URL }}
+        INPUT_KINSTA_API_KEY: ${{ inputs.KINSTA_API_KEY }}

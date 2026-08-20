@@ -1,0 +1,31 @@
+---
+name: kinsta-find-or-create-env
+description: Find the target Kinsta environment, cloning it when it is missing
+inputs:
+  SITE_ID:
+    required: true
+  TARGET_ENVIRONMENT:
+    required: true
+  SOURCE_ENVIRONMENT:
+    required: true
+  KINSTA_API_URL:
+    required: true
+  KINSTA_API_KEY:
+    required: true
+outputs:
+  CREATED:
+    value: ${{ steps.run.outputs.CREATED }}
+  ENVIRONMENT_ID:
+    value: ${{ steps.run.outputs.ENVIRONMENT_ID }}
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      run: bash "${{ github.action_path }}/run.sh"
+      env:
+        INPUT_SITE_ID: ${{ inputs.SITE_ID }}
+        INPUT_TARGET_ENVIRONMENT: ${{ inputs.TARGET_ENVIRONMENT }}
+        INPUT_SOURCE_ENVIRONMENT: ${{ inputs.SOURCE_ENVIRONMENT }}
+        INPUT_KINSTA_API_URL: ${{ inputs.KINSTA_API_URL }}
+        INPUT_KINSTA_API_KEY: ${{ inputs.KINSTA_API_KEY }}

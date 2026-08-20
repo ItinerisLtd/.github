@@ -1,0 +1,191 @@
+# yamllint disable-line rule:document-start
+name: kinsta-create-env
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_call:
+    inputs:
+      KINSTA_SITE_ID:
+        description: Kinsta site id owning the target environment
+        type: string
+        required: true
+      ENVIRONMENT:
+        description: Name of the environment to create or reuse
+        type: string
+        required: true
+      SOURCE_ENVIRONMENT:
+        description: Environment to clone when the target is missing
+        type: string
+        required: false
+        default: live
+      RUN_SEARCH_AND_REPLACE:
+        description: Rewrite cloned database URLs when setting primary domain
+        type: boolean
+        required: false
+        default: true
+      SHARED_ACTIONS_REF:
+        description: Ref of ItinerisLtd/.github holding the composite actions
+        type: string
+        required: false
+        default: main
+    secrets:
+      KINSTA_API_KEY:
+        required: true
+      CLOUDFLARE_API_TOKEN:
+        required: true
+      CLOUDFLARE_ZONE_ID_DEV:
+        required: true
+      USER_AGENT:
+        required: false
+    outputs:
+      CREATED:
+        description: Whether the target environment was newly created
+        value: ${{ jobs.provision.outputs.CREATED }}
+      ENVIRONMENT_ID:
+        description: Target Kinsta environment id
+        value: ${{ jobs.provision.outputs.ENVIRONMENT_ID }}
+      PRIMARY_DOMAIN:
+        description: Primary domain configured on the environment
+        value: ${{ jobs.provision.outputs.PRIMARY_DOMAIN }}
+      DOMAIN_ID:
+        description: Kinsta domain id for primary domain
+        value: ${{ jobs.provision.outputs.DOMAIN_ID }}
+      DNS_RECORDS_APPLIED:
+        description: Number of Cloudflare DNS records written
+        value: ${{ jobs.provision.outputs.DNS_RECORDS_APPLIED }}
+      SSH_USER:
+        description: SSH user for the environment
+        value: ${{ jobs.provision.outputs.SSH_USER }}
+      SSH_HOST:
+        description: SSH host for the environment
+        value: ${{ jobs.provision.outputs.SSH_HOST }}
+      SSH_PORT:
+        description: SSH port for the environment
+        value: ${{ jobs.provision.outputs.SSH_PORT }}
+
+permissions:
+  contents: read
+
+env:
+  KINSTA_API_URL: https://api.kinsta.com/v2
+  BASE_DOMAIN: itineris.dev
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: >-
+        kinsta-create-${{ inputs.KINSTA_SITE_ID }}-${{ inputs.ENVIRONMENT }}
+      cancel-in-progress: false
+    outputs:
+      CREATED: ${{ steps.summary.outputs.CREATED }}
+      ENVIRONMENT_ID: ${{ steps.summary.outputs.ENVIRONMENT_ID }}
+      PRIMARY_DOMAIN: ${{ steps.summary.outputs.PRIMARY_DOMAIN }}
+      DOMAIN_ID: ${{ steps.summary.outputs.DOMAIN_ID }}
+      DNS_RECORDS_APPLIED: ${{ steps.summary.outputs.DNS_RECORDS_APPLIED }}
+      SSH_USER: ${{ steps.summary.outputs.SSH_USER }}
+      SSH_HOST: ${{ steps.summary.outputs.SSH_HOST }}
+      SSH_PORT: ${{ steps.summary.outputs.SSH_PORT }}
+    steps:
+      - name: Checkout shared actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ItinerisLtd/.github
+          ref: ${{ inputs.SHARED_ACTIONS_REF }}
+          path: .itineris-actions
+          persist-credentials: false
+
+      - name: Find or create environment
+        id: environment
+        uses: ./.itineris-actions/.github/actions/kinsta-find-or-create-env
+        with:
+          SITE_ID: ${{ inputs.KINSTA_SITE_ID }}
+          TARGET_ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+          SOURCE_ENVIRONMENT: ${{ inputs.SOURCE_ENVIRONMENT }}
+          KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
+          KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
+
+      - name: Attach domain and build pointing record
+        id: domain
+        uses: ./.itineris-actions/.github/actions/kinsta-attach-domain
+        with:
+          SITE_ID: ${{ inputs.KINSTA_SITE_ID }}
+          ENVIRONMENT_ID: ${{ steps.environment.outputs.ENVIRONMENT_ID }}
+          REPOSITORY: ${{ github.repository }}
+          BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
+          KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
+          KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
+
+      - name: Collect DNS records from Kinsta
+        id: records
+        if: ${{ steps.domain.outputs.DOMAIN_ID != '' }}
+        uses: ./.itineris-actions/.github/actions/kinsta-collect-dns-records
+        with:
+          DOMAIN_ID: ${{ steps.domain.outputs.DOMAIN_ID }}
+          PRIMARY_DOMAIN: ${{ steps.domain.outputs.PRIMARY_DOMAIN }}
+          KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
+          KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
+
+      - name: Add DNS records to Cloudflare
+        id: dns
+        if: >-
+          ${{ steps.domain.outputs.RECORDS_JSON != ''
+          && steps.records.outputs.DNS_READY != 'true' }}
+        uses: ./.itineris-actions/.github/actions/cloudflare-add-records
+        with:
+          ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID_DEV }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RECORDS_JSON: ${{ steps.domain.outputs.RECORDS_JSON }}
+          ADDITIONAL_RECORDS_JSON: ${{ steps.records.outputs.RECORDS_JSON }}
+
+      - name: Set primary domain and search-replace URLs
+        if: ${{ steps.domain.outputs.DOMAIN_ID != '' }}
+        uses: ./.itineris-actions/.github/actions/kinsta-set-primary-domain
+        with:
+          SITE_ID: ${{ inputs.KINSTA_SITE_ID }}
+          ENVIRONMENT_ID: ${{ steps.environment.outputs.ENVIRONMENT_ID }}
+          DOMAIN_ID: ${{ steps.domain.outputs.DOMAIN_ID }}
+          RUN_SEARCH_AND_REPLACE: ${{ inputs.RUN_SEARCH_AND_REPLACE }}
+          KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
+          KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
+
+      - name: Verify hostname reaches Kinsta
+        if: ${{ steps.domain.outputs.PRIMARY_DOMAIN != '' }}
+        uses: ./.itineris-actions/.github/actions/verify-hostname-routing
+        with:
+          PRIMARY_DOMAIN: ${{ steps.domain.outputs.PRIMARY_DOMAIN }}
+          USER_AGENT: ${{ secrets.USER_AGENT }}
+
+      - name: Read SSH details
+        id: ssh
+        uses: ./.itineris-actions/.github/actions/kinsta-ssh-details
+        with:
+          SITE_ID: ${{ inputs.KINSTA_SITE_ID }}
+          ENVIRONMENT_ID: ${{ steps.environment.outputs.ENVIRONMENT_ID }}
+          ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+          KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
+          KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
+
+      - name: Build summary outputs
+        id: summary
+        env:
+          CREATED: ${{ steps.environment.outputs.CREATED }}
+          ENVIRONMENT_ID: ${{ steps.environment.outputs.ENVIRONMENT_ID }}
+          PRIMARY_DOMAIN: ${{ steps.domain.outputs.PRIMARY_DOMAIN }}
+          DOMAIN_ID: ${{ steps.domain.outputs.DOMAIN_ID }}
+          DNS_RECORDS_APPLIED: ${{ steps.dns.outputs.RECORDS_APPLIED }}
+          SSH_USER: ${{ steps.ssh.outputs.SSH_USER }}
+          SSH_HOST: ${{ steps.ssh.outputs.SSH_HOST }}
+          SSH_PORT: ${{ steps.ssh.outputs.SSH_PORT }}
+        run: |
+          set -euo pipefail
+          {
+            printf 'CREATED=%s\n' "$CREATED"
+            printf 'ENVIRONMENT_ID=%s\n' "$ENVIRONMENT_ID"
+            printf 'PRIMARY_DOMAIN=%s\n' "$PRIMARY_DOMAIN"
+            printf 'DOMAIN_ID=%s\n' "$DOMAIN_ID"
+            printf 'DNS_RECORDS_APPLIED=%s\n' "${DNS_RECORDS_APPLIED:-0}"
+            printf 'SSH_USER=%s\n' "$SSH_USER"
+            printf 'SSH_HOST=%s\n' "$SSH_HOST"
+            printf 'SSH_PORT=%s\n' "$SSH_PORT"
+          } >> "$GITHUB_OUTPUT"

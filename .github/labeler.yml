@@ -1,5 +1,8 @@
+# yamllint disable-line rule:document-start
 dependencies:
-- composer.json
-- composer.lock
-- yarn.lock
-- package.json
+  - changed-files:
+      - any-glob-to-any-file:
+          - composer.json
+          - composer.lock
+          - yarn.lock
+          - package.json

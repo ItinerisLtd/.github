@@ -25,7 +25,6 @@ on:
 
 jobs:
   check-theme-changes:
-    # yamllint disable-line rule:line-length
     runs-on: ubuntu-latest
     outputs:
       RADICLE_CHANGED: ${{ steps.diff.outputs.RADICLE_CHANGED }}
@@ -33,11 +32,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - id: diff
+        # yamllint disable rule:line-length
         run: |
           git fetch --no-tags --prune --depth=1 origin ${{ github.event.repository.default_branch }}
           CHANGED_FILES=$(git diff origin/${{ github.event.repository.default_branch }} HEAD --name-only --diff-filter=ACMRT)
           FILES_CHANGED=$([[ -z "${CHANGED_FILES}" ]] && echo 'false' || echo 'true')
           echo "RADICLE_CHANGED=${FILES_CHANGED}" >> "${GITHUB_OUTPUT}"
+        # yamllint enable rule:line-length
 
   node:
     name: build-production-assets
@@ -52,7 +53,6 @@ jobs:
         with:
           node-version: ${{ inputs.NODE_VERSION }}
           cache: yarn
-          # yamllint disable-line rule:line-length
           cache-dependency-path: yarn.lock
         env:
           FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
@@ -65,6 +65,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate Font Awesome Blade Icons
+        # yamllint disable-line rule:line-length
         run: grep --quiet 'icons:prepare' package.json && yarn icons:prepare || echo 'No icons to prepare'
         env:
           FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}

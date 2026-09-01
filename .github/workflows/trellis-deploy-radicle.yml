@@ -80,14 +80,15 @@ jobs:
           token: "${{ secrets.REPO_PAT }}"
 
       - name: Get environment IP address
+        # yamllint disable rule:line-length
         run: |
-          # yamllint disable-line rule:line-length
           HOST_IP="$(grep -Po 'ansible_host=((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}' "hosts/${{ inputs.TRELLIS_ENVIRONMENT }}" | sed 's/ansible_host=//g')"
           if [ -z "${HOST_IP}" ]; then
             echo 'HOST_IP not found.'
             exit 1
           fi
           echo "HOST_IP=${HOST_IP}" >> "${GITHUB_ENV}"
+        # yamllint enable rule:line-length
         working-directory: trellis
 
       - name: Checkout Site
@@ -100,7 +101,6 @@ jobs:
         with:
           node-version: "${{ inputs.NODE_VERSION }}"
           cache: yarn
-          # yamllint disable-line rule:line-length
           cache-dependency-path: ${{ inputs.WORKING_DIR }}/yarn.lock
         env:
           # yamllint disable-line rule:line-length

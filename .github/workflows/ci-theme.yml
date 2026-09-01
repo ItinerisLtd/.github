@@ -44,7 +44,7 @@ jobs:
         run: |
           git fetch --no-tags --prune --depth=1 origin ${{ github.event.repository.default_branch }}
           CHANGED_FILES=$(git diff origin/${{ github.event.repository.default_branch }} HEAD --name-only --diff-filter=ACMRT web/app/themes/${{ inputs.THEME_NAME }} || echo '')
-          FILES_CHANGED=$([ -z ${CHANGED_FILES} ] && echo 'false' || echo 'true')
+          FILES_CHANGED=$([[ -z "${CHANGED_FILES}" ]] && echo 'false' || echo 'true')
           echo "THEME_CHANGED=${FILES_CHANGED}" >> "${GITHUB_OUTPUT}"
 
   node:

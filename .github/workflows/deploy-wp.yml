@@ -1,5 +1,7 @@
+# yamllint disable-line rule:document-start
 name: Deploy Site
 
+# yamllint disable-line rule:truthy
 on:
   workflow_call:
     inputs:
@@ -30,6 +32,7 @@ jobs:
     environment: ${{ inputs.ENVIRONMENT }}
 
     env:
+      # yamllint disable-line rule:line-length
       RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     concurrency:
@@ -53,6 +56,7 @@ jobs:
         with:
           php-version: ${{ inputs.PHP_VERSION }}
         env:
+          # yamllint disable-line rule:line-length
           COMPOSER_AUTH_JSON: '{"http-basic": {"repo.packagist.com": {"username": "itineris", "password": "${{ secrets.PRIVATE_PACKAGIST_TOKEN }}"}}}'
 
       - name: Cache Composer packages
@@ -60,6 +64,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: vendor
+          # yamllint disable-line rule:line-length
           key: ${{ runner.os }}-php-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-php-composer-
@@ -72,6 +77,7 @@ jobs:
           ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
 
       - name: Install Dependencies Composer [WordPress]
+        # yamllint disable-line rule:line-length
         run: composer install --no-ansi --no-dev --no-interaction --no-progress --optimize-autoloader --no-scripts --classmap-authoritative
 
       - name: Build Theme
@@ -90,6 +96,7 @@ jobs:
       - name: Connect to Tailscale
         uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888
         with:
+          version: "1.102.3"
           oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
           args: "--exit-node=${{ secrets.TAILSCALE_EXIT_NODE }}"
@@ -98,12 +105,15 @@ jobs:
 
       - name: Get current release symlink target
         id: getCurrentRelease
+        # yamllint disable rule:line-length
         run: |
           CURRENT_RELEASE_LINK=$(ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} "readlink ~/public || echo ''")
           printf 'current_release_link=%s\n' "$CURRENT_RELEASE_LINK" >> "$GITHUB_OUTPUT"
           echo "Current release symlink target: $CURRENT_RELEASE_LINK"
+        # yamllint enable rule:line-length
 
       - name: Create Release Dir On Remote
+        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/releases/${{ env.RELEASE_ID }}'
 
       - name: Push files to the remote
@@ -111,41 +121,48 @@ jobs:
           set -euo pipefail
           SSH_PORT="${{ vars.SSH_PORT }}"
           SSH_DEST="${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }}"
+          # shellcheck disable=SC2088
           REMOTE_BASE="~/deploy/releases/${{ env.RELEASE_ID }}"
-          RSYNC_COMMON_OPTS="-avz --exclude-from=.deployignore"
-          SSH_CMD="ssh -p ${SSH_PORT}"
+          RSYNC_OPTS=(-avz --exclude-from=.deployignore)
+          RSYNC_OPTS+=(-e "ssh -p ${SSH_PORT}")
 
-          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./wp/ "${SSH_DEST}:${REMOTE_BASE}"
-          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./wp-config.php "${SSH_DEST}:${REMOTE_BASE}"
-          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./config "${SSH_DEST}:${REMOTE_BASE}"
-          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./vendor "${SSH_DEST}:${REMOTE_BASE}"
-          rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./wp-content "${SSH_DEST}:${REMOTE_BASE}"
+          rsync "${RSYNC_OPTS[@]}" ./wp/ "${SSH_DEST}:${REMOTE_BASE}"
+          rsync "${RSYNC_OPTS[@]}" ./wp-config.php "${SSH_DEST}:${REMOTE_BASE}"
+          rsync "${RSYNC_OPTS[@]}" ./config "${SSH_DEST}:${REMOTE_BASE}"
+          rsync "${RSYNC_OPTS[@]}" ./vendor "${SSH_DEST}:${REMOTE_BASE}"
+          rsync "${RSYNC_OPTS[@]}" ./wp-content "${SSH_DEST}:${REMOTE_BASE}"
 
           if [[ -d ./assets ]]; then
-            rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./assets "${SSH_DEST}:${REMOTE_BASE}"
+            rsync "${RSYNC_OPTS[@]}" ./assets "${SSH_DEST}:${REMOTE_BASE}"
           fi
 
           if [[ -f ./favicon.ico ]]; then
-            rsync ${RSYNC_COMMON_OPTS} -e "${SSH_CMD}" ./favicon.ico "${SSH_DEST}:${REMOTE_BASE}"
+            rsync "${RSYNC_OPTS[@]}" ./favicon.ico "${SSH_DEST}:${REMOTE_BASE}"
           fi
 
       - name: Create the shared directory if it doesn't exist
+        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/shared'
 
       - name: Create the uploads directory if it doesn't exist
+        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/shared/uploads'
 
       - name: Symlink uploads directory
+        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'rm -rf ~/deploy/releases/${{ env.RELEASE_ID }}/wp-content/uploads && ln -sfn ~/deploy/shared/uploads ~/deploy/releases/${{ env.RELEASE_ID }}/wp-content/uploads'
 
       - name: Symlink .env file
+        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ env.RELEASE_ID }}/.env'
 
       - name: Copy Wordfence WAF file
+        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'if [ -f ~/deploy/shared/wordfence-waf.php ]; then cp ~/deploy/shared/wordfence-waf.php ~/deploy/releases/${{ env.RELEASE_ID }}/wordfence-waf.php; else echo "No shared wordfence-waf.php yet - skipping."; fi'
 
       - name: Check if WordPress is already installed
         id: check-wp-installed
+        # yamllint disable rule:line-length
         run: |
           if ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ env.RELEASE_ID }} && wp core is-installed'; then
             echo "installed=true" >> "$GITHUB_OUTPUT"
@@ -153,16 +170,20 @@ jobs:
             echo "installed=false" >> "$GITHUB_OUTPUT"
             echo "::warning::WordPress isn't installed on this site yet."
           fi
+        # yamllint enable rule:line-length
 
       - name: Install language packs
         if: steps.check-wp-installed.outputs.installed == 'true'
+        # yamllint disable rule:line-length
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ env.RELEASE_ID }} && \
           rm -rf wp-content/languages && \
           wp --skip-plugins --skip-themes language core install "${{ inputs.WP_LANG }}" && \
           wp --skip-plugins --skip-themes option set WPLANG "${{ inputs.WP_LANG }}"'
+        # yamllint enable rule:line-length
 
       - name: Promote release symlink
+        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ~/deploy/releases/${{ env.RELEASE_ID }} ~/public'
 
       - name: Check if basic auth is configured
@@ -176,15 +197,18 @@ jobs:
 
       - name: Test the new release with smoke test (with basic auth)
         if: steps.check-basic-auth.outputs.has-basic-auth == 'true'
+        # yamllint disable-line rule:line-length
         uses: jtalk/url-health-check-action@e7d5ebdc9027fbf494d2d034f3e8fc78f8b7a2b9
         with:
           url: ${{ vars.SITE_URL }}?nocache
           max-attempts: 3
           retry-delay: 10s
+          # yamllint disable-line rule:line-length
           basic-auth: "${{ secrets.BASIC_AUTH_USERNAME }}:${{ secrets.BASIC_AUTH_PASSWORD }}"
 
       - name: Test the new release with smoke test (without basic auth)
         if: steps.check-basic-auth.outputs.has-basic-auth == 'false'
+        # yamllint disable-line rule:line-length
         uses: jtalk/url-health-check-action@e7d5ebdc9027fbf494d2d034f3e8fc78f8b7a2b9
         with:
           url: ${{ vars.SITE_URL }}?nocache
@@ -193,6 +217,7 @@ jobs:
 
       - name: Rollback deployment on failure
         if: failure()
+        # yamllint disable rule:line-length
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} '
             PREVIOUS_RELEASE="${{ steps.getCurrentRelease.outputs.current_release_link }}"
@@ -203,6 +228,7 @@ jobs:
             fi
             rm -rf ~/deploy/releases/${{ env.RELEASE_ID }}
           '
+        # yamllint enable rule:line-length
 
       - name: Reset OPcache
         if: success()
@@ -212,6 +238,7 @@ jobs:
           SITE_URL: ${{ vars.SITE_URL }}
           BASIC_AUTH_USERNAME: ${{ secrets.BASIC_AUTH_USERNAME }}
           BASIC_AUTH_PASSWORD: ${{ secrets.BASIC_AUTH_PASSWORD }}
+        # yamllint disable rule:line-length
         run: |
           if [ -z "${OPCACHE_PURGE_TOKEN}" ]; then
             echo 'OPCACHE_PURGE_TOKEN not configured - skipping OPcache reset.'
@@ -231,17 +258,22 @@ jobs:
           else
             echo "::warning::OPcache purge not confirmed (mu-plugin missing, token mismatch, or edge block). Deploy unaffected."
           fi
+        # yamllint enable rule:line-length
 
       - name: Clear Kinsta site cache if deployment does not fail
         if: success() && steps.check-wp-installed.outputs.installed == 'true'
+        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && wp --skip-plugins --skip-themes kinsta cache purge --site'
 
       - name: Install plugin and theme language packs
         if: steps.check-wp-installed.outputs.installed == 'true'
+        # yamllint disable rule:line-length
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && \
           wp --skip-plugins --skip-themes language plugin install --all "${{ inputs.WP_LANG }}" && \
           wp --skip-plugins --skip-themes language theme install --all "${{ inputs.WP_LANG }}"'
+        # yamllint enable rule:line-length
 
       - name: Cleanup old deployments
+        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} "cd ~/deploy/releases && ls -t | tail -n +4 | xargs -r rm -rf"

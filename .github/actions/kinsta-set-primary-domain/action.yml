@@ -1,0 +1,37 @@
+---
+name: kinsta-set-primary-domain
+description: Promote a domain to primary and search-replace the database URLs
+inputs:
+  SITE_ID:
+    required: true
+  ENVIRONMENT_ID:
+    required: true
+  DOMAIN_ID:
+    required: true
+  RUN_SEARCH_AND_REPLACE:
+    required: false
+    default: 'true'
+  KINSTA_API_URL:
+    required: true
+  KINSTA_API_KEY:
+    required: true
+  MAX_ATTEMPTS:
+    required: false
+    default: '40'
+  SLEEP_SECONDS:
+    required: false
+    default: '15'
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: bash "${{ github.action_path }}/run.sh"
+      env:
+        INPUT_SITE_ID: ${{ inputs.SITE_ID }}
+        INPUT_ENVIRONMENT_ID: ${{ inputs.ENVIRONMENT_ID }}
+        INPUT_DOMAIN_ID: ${{ inputs.DOMAIN_ID }}
+        INPUT_RUN_SEARCH_AND_REPLACE: ${{ inputs.RUN_SEARCH_AND_REPLACE }}
+        INPUT_KINSTA_API_URL: ${{ inputs.KINSTA_API_URL }}
+        INPUT_KINSTA_API_KEY: ${{ inputs.KINSTA_API_KEY }}
+        INPUT_MAX_ATTEMPTS: ${{ inputs.MAX_ATTEMPTS }}
+        INPUT_SLEEP_SECONDS: ${{ inputs.SLEEP_SECONDS }}

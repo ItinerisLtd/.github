@@ -1,0 +1,36 @@
+---
+name: kinsta-attach-domain
+description: Attach the project hostname and emit its pointing record
+inputs:
+  SITE_ID:
+    required: true
+  ENVIRONMENT_ID:
+    required: true
+  REPOSITORY:
+    description: Caller repository in owner/name form
+    required: true
+  BASE_DOMAIN:
+    description: Zone the derived project hostname is created under
+    required: true
+  KINSTA_API_URL:
+    required: true
+  KINSTA_API_KEY:
+    required: true
+outputs:
+  PRIMARY_DOMAIN:
+    value: ${{ steps.run.outputs.PRIMARY_DOMAIN }}
+  DOMAIN_ID:
+    value: ${{ steps.run.outputs.DOMAIN_ID }}
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      run: bash "${{ github.action_path }}/run.sh"
+      env:
+        INPUT_SITE_ID: ${{ inputs.SITE_ID }}
+        INPUT_ENVIRONMENT_ID: ${{ inputs.ENVIRONMENT_ID }}
+        INPUT_REPOSITORY: ${{ inputs.REPOSITORY }}
+        INPUT_BASE_DOMAIN: ${{ inputs.BASE_DOMAIN }}
+        INPUT_KINSTA_API_URL: ${{ inputs.KINSTA_API_URL }}
+        INPUT_KINSTA_API_KEY: ${{ inputs.KINSTA_API_KEY }}

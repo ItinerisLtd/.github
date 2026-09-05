@@ -1,0 +1,12 @@
+{
+  "name": "Kinsta create environment",
+  "description": "Create or reuse Kinsta environment and configure domain/DNS",
+  "categories": [
+    "php",
+    "infrastructure"
+  ],
+  "filePatterns": [
+    "composer.json$",
+    "package.json$"
+  ]
+}

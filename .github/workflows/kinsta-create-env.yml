@@ -31,6 +31,10 @@ on:
     secrets:
       KINSTA_API_KEY:
         required: true
+      CLOUDFLARE_API_TOKEN:
+        required: true
+      CLOUDFLARE_ZONE_ID_DEV:
+        required: true
       USER_AGENT:
         required: false
     outputs:
@@ -46,6 +50,9 @@ on:
       DOMAIN_ID:
         description: Kinsta domain id for primary domain
         value: ${{ jobs.provision.outputs.DOMAIN_ID }}
+      DNS_RECORDS_APPLIED:
+        description: Number of Cloudflare DNS records written
+        value: ${{ jobs.provision.outputs.DNS_RECORDS_APPLIED }}
       SSH_USER:
         description: SSH user for the environment
         value: ${{ jobs.provision.outputs.SSH_USER }}
@@ -75,6 +82,7 @@ jobs:
       ENVIRONMENT_ID: ${{ steps.summary.outputs.ENVIRONMENT_ID }}
       PRIMARY_DOMAIN: ${{ steps.summary.outputs.PRIMARY_DOMAIN }}
       DOMAIN_ID: ${{ steps.summary.outputs.DOMAIN_ID }}
+      DNS_RECORDS_APPLIED: ${{ steps.summary.outputs.DNS_RECORDS_APPLIED }}
       SSH_USER: ${{ steps.summary.outputs.SSH_USER }}
       SSH_HOST: ${{ steps.summary.outputs.SSH_HOST }}
       SSH_PORT: ${{ steps.summary.outputs.SSH_PORT }}
@@ -97,7 +105,7 @@ jobs:
           KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
           KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
 
-      - name: Attach domain
+      - name: Attach domain and build pointing record
         id: domain
         uses: ./.itineris-actions/.github/actions/kinsta-attach-domain
         with:
@@ -107,6 +115,28 @@ jobs:
           BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
           KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
           KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
+
+      - name: Collect DNS records from Kinsta
+        id: records
+        if: ${{ steps.domain.outputs.DOMAIN_ID != '' }}
+        uses: ./.itineris-actions/.github/actions/kinsta-collect-dns-records
+        with:
+          DOMAIN_ID: ${{ steps.domain.outputs.DOMAIN_ID }}
+          PRIMARY_DOMAIN: ${{ steps.domain.outputs.PRIMARY_DOMAIN }}
+          KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
+          KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
+
+      - name: Add DNS records to Cloudflare
+        id: dns
+        if: >-
+          ${{ steps.domain.outputs.RECORDS_JSON != ''
+          && steps.records.outputs.DNS_READY != 'true' }}
+        uses: ./.itineris-actions/.github/actions/cloudflare-add-records
+        with:
+          ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID_DEV }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RECORDS_JSON: ${{ steps.domain.outputs.RECORDS_JSON }}
+          ADDITIONAL_RECORDS_JSON: ${{ steps.records.outputs.RECORDS_JSON }}
 
       - name: Set primary domain and search-replace URLs
         if: ${{ steps.domain.outputs.DOMAIN_ID != '' }}
@@ -153,6 +183,7 @@ jobs:
             printf 'ENVIRONMENT_ID=%s\n' "$ENVIRONMENT_ID"
             printf 'PRIMARY_DOMAIN=%s\n' "$PRIMARY_DOMAIN"
             printf 'DOMAIN_ID=%s\n' "$DOMAIN_ID"
+            printf 'DNS_RECORDS_APPLIED=%s\n' "${DNS_RECORDS_APPLIED:-0}"
             printf 'SSH_USER=%s\n' "$SSH_USER"
             printf 'SSH_HOST=%s\n' "$SSH_HOST"
             printf 'SSH_PORT=%s\n' "$SSH_PORT"

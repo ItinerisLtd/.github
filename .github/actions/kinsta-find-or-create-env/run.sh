@@ -4,7 +4,9 @@ set -euo pipefail
 # shellcheck source=../_lib/kinsta-api.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../_lib/kinsta-api.sh"
 
-TARGET_ENV="$(printf '%s' "${INPUT_TARGET_ENVIRONMENT:-}" | xargs)"
+TARGET_ENV="${INPUT_TARGET_ENVIRONMENT:-}"
+TARGET_ENV="${TARGET_ENV#"${TARGET_ENV%%[![:space:]]*}"}"
+TARGET_ENV="${TARGET_ENV%"${TARGET_ENV##*[![:space:]]}"}"
 SITE_ID="${INPUT_SITE_ID:-}"
 API_URL="${INPUT_KINSTA_API_URL:-}"
 API_KEY="${INPUT_KINSTA_API_KEY:-}"

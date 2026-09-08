@@ -5,6 +5,8 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../_lib/kinsta-api.sh"
 
 TARGET_ENV="${INPUT_TARGET_ENVIRONMENT:-}"
+TARGET_ENV="${TARGET_ENV#"${TARGET_ENV%%[![:space:]]*}"}"
+TARGET_ENV="${TARGET_ENV%"${TARGET_ENV##*[![:space:]]}"}"
 SITE_ID="${INPUT_SITE_ID:-}"
 API_URL="${INPUT_KINSTA_API_URL:-}"
 API_KEY="${INPUT_KINSTA_API_KEY:-}"
@@ -16,6 +18,14 @@ fi
 
 SCRATCH_DIR="${RUNNER_TEMP:?RUNNER_TEMP is not set}"
 OP_JSON_FILE="$SCRATCH_DIR/kinsta-op.json"
+
+case "$(tr '[:upper:]' '[:lower:]' <<<"$TARGET_ENV")" in
+  live | production)
+    echo "Refusing to create or reconfigure the '$TARGET_ENV' environment." >&2
+    echo "This workflow provisions non-production environments only." >&2
+    exit 14
+    ;;
+esac
 
 if [[ "$(tr '[:upper:]' '[:lower:]' <<<"$TARGET_ENV")" == \
       "$(tr '[:upper:]' '[:lower:]' <<<"${INPUT_SOURCE_ENVIRONMENT:-live}")" ]]; then
@@ -37,6 +47,18 @@ get_envs() {
 ENVS_JSON="$(get_envs)"
 
 TARGET_ID="$(jq -r --arg n "$TARGET_ENV" '.site.environments[] | select((.name | ascii_downcase) == ($n | ascii_downcase) or (.display_name | ascii_downcase) == ($n | ascii_downcase)) | .id' <<<"$ENVS_JSON" | head -n1)"
+
+if [[ -n "${TARGET_ID:-}" && "$TARGET_ID" != "null" ]]; then
+  RESOLVED_NAME="$(jq -r --arg id "$TARGET_ID" '.site.environments[] | select(.id == $id) | .name' <<<"$ENVS_JSON" | head -n1)"
+
+  case "$(tr '[:upper:]' '[:lower:]' <<<"$RESOLVED_NAME")" in
+    live | production)
+      echo "'$TARGET_ENV' resolves to the '$RESOLVED_NAME' environment." >&2
+      echo "This workflow provisions non-production environments only." >&2
+      exit 14
+      ;;
+  esac
+fi
 
 CREATED='false'
 

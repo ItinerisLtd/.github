@@ -79,6 +79,19 @@ jobs:
       SSH_HOST: ${{ steps.summary.outputs.SSH_HOST }}
       SSH_PORT: ${{ steps.summary.outputs.SSH_PORT }}
     steps:
+      - name: Reject production environments
+        env:
+          ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+        run: |
+          set -euo pipefail
+          case "$(tr '[:upper:]' '[:lower:]' <<<"$ENVIRONMENT")" in
+            live | production)
+              echo "Refusing to provision '$ENVIRONMENT'." >&2
+              echo "Non-production environments only." >&2
+              exit 1
+              ;;
+          esac
+
       - name: Checkout shared actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

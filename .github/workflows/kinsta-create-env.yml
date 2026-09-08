@@ -84,11 +84,12 @@ jobs:
           ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
         run: |
           set -euo pipefail
-          case "$(tr '[:upper:]' '[:lower:]' <<<"$ENVIRONMENT")" in
+          TARGET="$(printf '%s' "$ENVIRONMENT" | xargs)"
+          case "$(tr '[:upper:]' '[:lower:]' <<<"$TARGET")" in
             live | production)
-              echo "Refusing to provision '$ENVIRONMENT'." >&2
+              echo "Refusing to provision '$TARGET'." >&2
               echo "Non-production environments only." >&2
-              exit 1
+              exit 14
               ;;
           esac
 

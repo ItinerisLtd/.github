@@ -14,6 +14,11 @@ fi
 
 TRELLIS_ENV_NORMALISED="$(tr '[:upper:]' '[:lower:]' <<<"$TRELLIS_ENVIRONMENT")"
 read -r TRELLIS_ENV_NORMALISED <<<"$TRELLIS_ENV_NORMALISED"
+# Use the normalised value for every subsequent block lookup, not just the
+# guard below — otherwise a caller passing e.g. "Staging" would pass the
+# guard (which does normalise) but then fail to find "@staging:" in the
+# file (which wouldn't).
+TRELLIS_ENVIRONMENT="$TRELLIS_ENV_NORMALISED"
 case "$TRELLIS_ENV_NORMALISED" in
   live | production)
     echo "Refusing to override SSH alias for '$TRELLIS_ENVIRONMENT'." >&2
@@ -77,8 +82,17 @@ awk -v env="@$TRELLIS_ENVIRONMENT:" -v newssh="$NEW_SSH" '
 ' "$ALIAS_FILE" >"$ALIAS_FILE.tmp"
 mv "$ALIAS_FILE.tmp" "$ALIAS_FILE"
 
-if ! grep -qF "ssh: \"$NEW_SSH\"" "$ALIAS_FILE"; then
-  echo "Failed to set ssh alias in $ALIAS_FILE." >&2
+# Scope the success check to the target block specifically, not the whole
+# file — otherwise a coincidentally identical ssh value already present in
+# a different environment's block would mask a failed rewrite here.
+BLOCK_CONTENT="$(awk -v env="@$TRELLIS_ENVIRONMENT:" '
+  $0 == env { in_block=1; print; next }
+  in_block && /^@[^[:space:]]/ { in_block=0 }
+  in_block { print }
+' "$ALIAS_FILE")"
+
+if ! grep -qF "ssh: \"$NEW_SSH\"" <<<"$BLOCK_CONTENT"; then
+  echo "Failed to set ssh alias in the '@$TRELLIS_ENVIRONMENT:' block of $ALIAS_FILE." >&2
   cat "$ALIAS_FILE" >&2
   exit 1
 fi

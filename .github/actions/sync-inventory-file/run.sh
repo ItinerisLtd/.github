@@ -85,11 +85,15 @@ while true; do
 
     # The same head SHA can carry more than one check-run sharing this name
     # (e.g. ci.yml triggers on both push and pull_request for this branch).
-    # Only the most recently started instance reflects the current state —
+    # Only the most recently created instance reflects the current state —
     # an older duplicate can be `cancelled` by a concurrency group while a
     # newer one succeeds, so treat that older run as superseded, not fatal.
+    # Sort by `.id` (monotonically increasing) rather than `.started_at`: a
+    # newer duplicate that is still queued has `started_at: null`, which
+    # jq sorts first, not last, so sorting by start time would wrongly pick
+    # an older, already-concluded run as "latest".
     LATEST_CONCLUSION="$(jq -rs --arg name "$NAME" \
-      '([.[] | select(.name == $name)] | sort_by(.started_at) | last) as $run
+      '([.[] | select(.name == $name)] | sort_by(.id) | last) as $run
        | if $run == null then "pending" else ($run.conclusion // "pending") end' \
       <<<"$CHECK_RUNS_JSON")"
 

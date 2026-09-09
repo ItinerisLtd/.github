@@ -152,11 +152,12 @@ jobs:
         env:
           APP_ID: ${{ secrets.TRELLIS_INVENTORY_BOT_APP_ID }}
           PRIVATE_KEY: ${{ secrets.TRELLIS_INVENTORY_BOT_PRIVATE_KEY }}
+          SSH_USER: ${{ inputs.SSH_USER }}
         # yamllint disable rule:line-length
         run: |
           set -euo pipefail
-          if [[ -z "$APP_ID" || -z "$PRIVATE_KEY" ]]; then
-            echo "TRELLIS_INVENTORY_BOT_APP_ID and TRELLIS_INVENTORY_BOT_PRIVATE_KEY are required to sync SSH details." >&2
+          if [[ -z "$APP_ID" || -z "$PRIVATE_KEY" || -z "$SSH_USER" ]]; then
+            echo "TRELLIS_INVENTORY_BOT_APP_ID, TRELLIS_INVENTORY_BOT_PRIVATE_KEY, and SSH_USER are required to sync SSH details." >&2
             exit 1
           fi
         # yamllint enable rule:line-length
@@ -296,6 +297,7 @@ jobs:
           COMMIT_MESSAGE: "fix(inventory): refresh Kinsta SSH alias for ${{ inputs.TRELLIS_ENVIRONMENT }}"
           CHECK_NAMES: ${{ inputs.BEDROCK_CI_CHECK_NAMES }}
           GITHUB_TOKEN: ${{ steps.inventory-bot-token.outputs.token }}
+          BASE_BRANCH: ${{ inputs.BEDROCK_DEPLOY_BRANCH }}
 
       - name: Configure git auth for org packages
         # yamllint disable rule:line-length

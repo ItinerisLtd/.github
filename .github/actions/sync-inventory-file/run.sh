@@ -6,6 +6,7 @@ FILE_PATH="${INPUT_FILE_PATH:-}"
 CONTENT_FILE="${INPUT_CONTENT_FILE:-}"
 COMMIT_MESSAGE="${INPUT_COMMIT_MESSAGE:-}"
 CHECK_NAMES="${INPUT_CHECK_NAMES:-}"
+BASE_BRANCH="${INPUT_BASE_BRANCH:-}"
 
 if [[ -z "$REPOSITORY" || -z "$FILE_PATH" || -z "$CONTENT_FILE" || -z "$COMMIT_MESSAGE" || -z "$CHECK_NAMES" ]]; then
   echo "Missing required input(s)" >&2
@@ -24,8 +25,20 @@ fi
 
 mapfile -t CHECK_NAMES_ARRAY <<<"$CHECK_NAMES"
 
-DEFAULT_BRANCH="$(gh api "repos/$REPOSITORY" --jq '.default_branch')"
-BASE_SHA="$(gh api "repos/$REPOSITORY/git/ref/heads/$DEFAULT_BRANCH" --jq '.object.sha')"
+NON_BLANK_CHECK_NAMES=0
+for NAME in "${CHECK_NAMES_ARRAY[@]}"; do
+  [[ -n "$NAME" ]] && NON_BLANK_CHECK_NAMES=$((NON_BLANK_CHECK_NAMES + 1))
+done
+
+if ((NON_BLANK_CHECK_NAMES == 0)); then
+  echo "CHECK_NAMES contained no non-blank entries; refusing to merge with no checks to wait for." >&2
+  exit 2
+fi
+
+if [[ -z "$BASE_BRANCH" ]]; then
+  BASE_BRANCH="$(gh api "repos/$REPOSITORY" --jq '.default_branch')"
+fi
+BASE_SHA="$(gh api "repos/$REPOSITORY/git/ref/heads/$BASE_BRANCH" --jq '.object.sha')"
 
 BRANCH_NAME="kinsta-ssh-sync/$(basename "$FILE_PATH")-$(date +%s)"
 
@@ -45,7 +58,7 @@ gh api --method PUT "repos/$REPOSITORY/contents/$FILE_PATH" \
 PR_NUMBER="$(gh api "repos/$REPOSITORY/pulls" \
   -f title="$COMMIT_MESSAGE" \
   -f head="$BRANCH_NAME" \
-  -f base="$DEFAULT_BRANCH" \
+  -f base="$BASE_BRANCH" \
   -f body="Automated sync of Kinsta SSH connection details. Merges automatically once checks pass." \
   --jq '.number')"
 
@@ -64,20 +77,27 @@ while true; do
   for NAME in "${CHECK_NAMES_ARRAY[@]}"; do
     [[ -z "$NAME" ]] && continue
 
-    CONCLUSION="$(jq -r --arg name "$NAME" \
-      '(first(.[] | select(.name == $name) | .conclusion) // "pending")' \
-      <<<"$CHECK_RUNS_JSON")"
+    mapfile -t CONCLUSIONS < <(jq -r --arg name "$NAME" \
+      '.[] | select(.name == $name) | (.conclusion // "pending")' \
+      <<<"$CHECK_RUNS_JSON")
 
-    case "$CONCLUSION" in
-      success | skipped) ;;
-      failure | cancelled | timed_out | action_required)
-        echo "Check '$NAME' concluded '$CONCLUSION' on $REPOSITORY PR #$PR_NUMBER." >&2
-        exit 1
-        ;;
-      *)
-        ALL_PASSED=false
-        ;;
-    esac
+    if ((${#CONCLUSIONS[@]} == 0)); then
+      ALL_PASSED=false
+      continue
+    fi
+
+    for CONCLUSION in "${CONCLUSIONS[@]}"; do
+      case "$CONCLUSION" in
+        success | skipped) ;;
+        failure | cancelled | timed_out | action_required)
+          echo "Check '$NAME' concluded '$CONCLUSION' on $REPOSITORY PR #$PR_NUMBER." >&2
+          exit 1
+          ;;
+        *)
+          ALL_PASSED=false
+          ;;
+      esac
+    done
   done
 
   if [[ "$ALL_PASSED" == "true" ]]; then

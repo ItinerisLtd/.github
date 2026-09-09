@@ -75,7 +75,9 @@ PR_NUMBER="$(gh api "repos/$REPOSITORY/pulls" \
 
 echo "Opened PR #$PR_NUMBER on $REPOSITORY"
 
+echo "DIAGNOSTIC: fetching PR head SHA..."
 HEAD_SHA="$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER" --jq '.head.sha')"
+echo "DIAGNOSTIC: head SHA is $HEAD_SHA"
 
 MAX_ATTEMPTS=60
 SLEEP_SECONDS=10
@@ -89,7 +91,9 @@ while true; do
   # means each page just contributes more objects to one flat stream; `jq
   # -s` (slurp) below reassembles that stream into a single array
   # regardless of how many pages contributed to it.
+  echo "DIAGNOSTIC: fetching check-runs for $HEAD_SHA..."
   CHECK_RUNS_JSON="$(gh api --paginate "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs" --jq '.check_runs[]')"
+  echo "DIAGNOSTIC: check-runs fetched"
 
   for NAME in "${CHECK_NAMES_ARRAY[@]}"; do
     [[ -z "$NAME" ]] && continue

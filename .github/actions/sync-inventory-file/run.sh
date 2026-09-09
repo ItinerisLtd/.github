@@ -23,11 +23,22 @@ if [[ ! -f "$CONTENT_FILE" ]]; then
   exit 1
 fi
 
-mapfile -t CHECK_NAMES_ARRAY <<<"$CHECK_NAMES"
+mapfile -t RAW_CHECK_NAMES <<<"$CHECK_NAMES"
+
+# Trim CR (from CRLF line endings) and surrounding whitespace from each
+# entry, since an untrimmed name would never exact-match a real check-run
+# name and the wait loop would time out even though the check is present.
+CHECK_NAMES_ARRAY=()
+for NAME in "${RAW_CHECK_NAMES[@]}"; do
+  NAME="${NAME//$'\r'/}"
+  NAME="${NAME#"${NAME%%[![:space:]]*}"}"
+  NAME="${NAME%"${NAME##*[![:space:]]}"}"
+  CHECK_NAMES_ARRAY+=("$NAME")
+done
 
 NON_BLANK_CHECK_NAMES=0
 for NAME in "${CHECK_NAMES_ARRAY[@]}"; do
-  [[ -n "${NAME//[[:space:]]/}" ]] && NON_BLANK_CHECK_NAMES=$((NON_BLANK_CHECK_NAMES + 1))
+  [[ -n "$NAME" ]] && NON_BLANK_CHECK_NAMES=$((NON_BLANK_CHECK_NAMES + 1))
 done
 
 if ((NON_BLANK_CHECK_NAMES == 0)); then
@@ -40,7 +51,7 @@ if [[ -z "$BASE_BRANCH" ]]; then
 fi
 BASE_SHA="$(gh api "repos/$REPOSITORY/git/ref/heads/$BASE_BRANCH" --jq '.object.sha')"
 
-BRANCH_NAME="kinsta-ssh-sync/$(basename "$FILE_PATH")-$(date +%s)"
+BRANCH_NAME="kinsta-ssh-sync/$(basename "$FILE_PATH")-${GITHUB_RUN_ID:?GITHUB_RUN_ID is not set}-$(date +%s)"
 
 gh api "repos/$REPOSITORY/git/refs" \
   -f ref="refs/heads/$BRANCH_NAME" \
@@ -81,7 +92,7 @@ while true; do
   CHECK_RUNS_JSON="$(gh api --paginate "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs" --jq '.check_runs[]')"
 
   for NAME in "${CHECK_NAMES_ARRAY[@]}"; do
-    [[ -z "${NAME//[[:space:]]/}" ]] && continue
+    [[ -z "$NAME" ]] && continue
 
     # The same head SHA can carry more than one check-run sharing this name
     # (e.g. ci.yml triggers on both push and pull_request for this branch).

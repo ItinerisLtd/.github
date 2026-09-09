@@ -27,7 +27,7 @@ mapfile -t CHECK_NAMES_ARRAY <<<"$CHECK_NAMES"
 
 NON_BLANK_CHECK_NAMES=0
 for NAME in "${CHECK_NAMES_ARRAY[@]}"; do
-  [[ -n "$NAME" ]] && NON_BLANK_CHECK_NAMES=$((NON_BLANK_CHECK_NAMES + 1))
+  [[ -n "${NAME//[[:space:]]/}" ]] && NON_BLANK_CHECK_NAMES=$((NON_BLANK_CHECK_NAMES + 1))
 done
 
 if ((NON_BLANK_CHECK_NAMES == 0)); then
@@ -72,32 +72,31 @@ ATTEMPT=0
 
 while true; do
   ALL_PASSED=true
-  CHECK_RUNS_JSON="$(gh api "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs" --jq '.check_runs')"
+  CHECK_RUNS_JSON="$(gh api --paginate "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs" --jq '.check_runs')"
 
   for NAME in "${CHECK_NAMES_ARRAY[@]}"; do
-    [[ -z "$NAME" ]] && continue
+    [[ -z "${NAME//[[:space:]]/}" ]] && continue
 
-    mapfile -t CONCLUSIONS < <(jq -r --arg name "$NAME" \
-      '.[] | select(.name == $name) | (.conclusion // "pending")' \
-      <<<"$CHECK_RUNS_JSON")
+    # The same head SHA can carry more than one check-run sharing this name
+    # (e.g. ci.yml triggers on both push and pull_request for this branch).
+    # Only the most recently started instance reflects the current state —
+    # an older duplicate can be `cancelled` by a concurrency group while a
+    # newer one succeeds, so treat that older run as superseded, not fatal.
+    LATEST_CONCLUSION="$(jq -r --arg name "$NAME" \
+      '([.[] | select(.name == $name)] | sort_by(.started_at) | last) as $run
+       | if $run == null then "pending" else ($run.conclusion // "pending") end' \
+      <<<"$CHECK_RUNS_JSON")"
 
-    if ((${#CONCLUSIONS[@]} == 0)); then
-      ALL_PASSED=false
-      continue
-    fi
-
-    for CONCLUSION in "${CONCLUSIONS[@]}"; do
-      case "$CONCLUSION" in
-        success | skipped) ;;
-        failure | cancelled | timed_out | action_required)
-          echo "Check '$NAME' concluded '$CONCLUSION' on $REPOSITORY PR #$PR_NUMBER." >&2
-          exit 1
-          ;;
-        *)
-          ALL_PASSED=false
-          ;;
-      esac
-    done
+    case "$LATEST_CONCLUSION" in
+      success | skipped) ;;
+      failure | cancelled | timed_out | action_required)
+        echo "Check '$NAME' concluded '$LATEST_CONCLUSION' on $REPOSITORY PR #$PR_NUMBER." >&2
+        exit 1
+        ;;
+      *)
+        ALL_PASSED=false
+        ;;
+    esac
   done
 
   if [[ "$ALL_PASSED" == "true" ]]; then

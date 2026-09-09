@@ -53,6 +53,17 @@ if ! grep -qF "@$TRELLIS_ENVIRONMENT:" "$ALIAS_FILE"; then
   exit 1
 fi
 
+SSH_LINE_COUNT="$(awk -v env="@$TRELLIS_ENVIRONMENT:" '
+  $0 == env { in_block=1; next }
+  in_block && /^@[^[:space:]]/ { in_block=0 }
+  in_block && /^[[:space:]]+ssh:/ { count++ }
+  END { print count+0 }
+' "$ALIAS_FILE")"
+if [[ "$SSH_LINE_COUNT" != "1" ]]; then
+  echo "Expected exactly one 'ssh:' line in the '@$TRELLIS_ENVIRONMENT:' block of $ALIAS_FILE, found $SSH_LINE_COUNT." >&2
+  exit 1
+fi
+
 NEW_SSH="$SSH_USER@$SSH_HOST:$SSH_PORT"
 
 awk -v env="@$TRELLIS_ENVIRONMENT:" -v newssh="$NEW_SSH" '

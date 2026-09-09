@@ -1,0 +1,26 @@
+---
+name: bedrock-override-alias
+description: Update SSH details in a Bedrock wp-cli Trellis alias file
+inputs:
+  SSH_USER:
+    required: true
+  SSH_HOST:
+    required: true
+  SSH_PORT:
+    required: true
+  TRELLIS_ENVIRONMENT:
+    required: true
+  ALIAS_FILE:
+    required: true
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      run: bash "${{ github.action_path }}/run.sh"
+      env:
+        INPUT_SSH_USER: ${{ inputs.SSH_USER }}
+        INPUT_SSH_HOST: ${{ inputs.SSH_HOST }}
+        INPUT_SSH_PORT: ${{ inputs.SSH_PORT }}
+        INPUT_TRELLIS_ENVIRONMENT: ${{ inputs.TRELLIS_ENVIRONMENT }}
+        INPUT_ALIAS_FILE: ${{ inputs.ALIAS_FILE }}

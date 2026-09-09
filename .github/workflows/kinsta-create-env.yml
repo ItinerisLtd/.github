@@ -23,6 +23,14 @@ on:
         type: boolean
         required: false
         default: true
+      CONFIGURE_EXISTING:
+        description: >-
+          Reconcile the domain and primary domain even when the environment
+          already existed. Leave false on an automatic path; set true to
+          repair an environment left half-configured.
+        type: boolean
+        required: false
+        default: false
       SHARED_ACTIONS_REF:
         description: Ref of ItinerisLtd/.github holding the composite actions
         type: string
@@ -65,6 +73,7 @@ env:
 
 jobs:
   provision:
+    name: "${{ inputs.ENVIRONMENT }}"
     runs-on: ubuntu-latest
     concurrency:
       group: >-
@@ -115,6 +124,9 @@ jobs:
 
       - name: Attach domain
         id: domain
+        if: >-
+          ${{ inputs.CONFIGURE_EXISTING
+          || steps.environment.outputs.CREATED == 'true' }}
         uses: ./.itineris-actions/.github/actions/kinsta-attach-domain
         with:
           SITE_ID: ${{ inputs.KINSTA_SITE_ID }}

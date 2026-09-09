@@ -161,6 +161,37 @@ jobs:
           fi
         # yamllint enable rule:line-length
 
+      - name: Compute repository short names
+        id: repo-names
+        if: ${{ inputs.SSH_HOST != '' || inputs.SSH_PORT != '' }}
+        env:
+          TRELLIS_REPOSITORY: ${{ inputs.TRELLIS_REPOSITORY }}
+          BEDROCK_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          {
+            printf 'TRELLIS_REPO_SHORT=%s\n' "${TRELLIS_REPOSITORY#*/}"
+            printf 'BEDROCK_REPO_SHORT=%s\n' "${BEDROCK_REPOSITORY#*/}"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Generate inventory bot token
+        id: inventory-bot-token
+        if: ${{ inputs.SSH_HOST != '' || inputs.SSH_PORT != '' }}
+        # yamllint disable-line rule:line-length
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.TRELLIS_INVENTORY_BOT_APP_ID }}
+          private-key: ${{ secrets.TRELLIS_INVENTORY_BOT_PRIVATE_KEY }}
+          repositories: |
+            ${{ steps.repo-names.outputs.TRELLIS_REPO_SHORT }}
+            ${{ steps.repo-names.outputs.BEDROCK_REPO_SHORT }}
+
+      - name: Snapshot original Trellis inventory
+        id: trellis-snapshot
+        if: ${{ inputs.SSH_HOST != '' || inputs.SSH_PORT != '' }}
+        # yamllint disable-line rule:line-length
+        run: cp "trellis/hosts/${{ inputs.TRELLIS_ENVIRONMENT }}" "$RUNNER_TEMP/hosts.orig"
+
       - name: Checkout shared actions
         if: ${{ inputs.SSH_HOST != '' || inputs.SSH_PORT != '' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -178,6 +209,33 @@ jobs:
           SSH_PORT: ${{ inputs.SSH_PORT }}
           TRELLIS_ENVIRONMENT: ${{ inputs.TRELLIS_ENVIRONMENT }}
           HOSTS_FILE: trellis/hosts/${{ inputs.TRELLIS_ENVIRONMENT }}
+
+      - name: Check if Trellis inventory changed
+        id: trellis-diff
+        if: ${{ inputs.SSH_HOST != '' || inputs.SSH_PORT != '' }}
+        # yamllint disable rule:line-length
+        run: |
+          set -euo pipefail
+          if diff -q "$RUNNER_TEMP/hosts.orig" "trellis/hosts/${{ inputs.TRELLIS_ENVIRONMENT }}" >/dev/null; then
+            echo "CHANGED=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "CHANGED=true" >>"$GITHUB_OUTPUT"
+          fi
+        # yamllint enable rule:line-length
+
+      - name: Sync Trellis inventory
+        if: >-
+          (inputs.SSH_HOST != '' || inputs.SSH_PORT != '')
+          && steps.trellis-diff.outputs.CHANGED == 'true'
+        uses: ./.itineris-actions/.github/actions/sync-inventory-file
+        with:
+          REPOSITORY: ${{ inputs.TRELLIS_REPOSITORY }}
+          FILE_PATH: hosts/${{ inputs.TRELLIS_ENVIRONMENT }}
+          CONTENT_FILE: trellis/hosts/${{ inputs.TRELLIS_ENVIRONMENT }}
+          # yamllint disable-line rule:line-length
+          COMMIT_MESSAGE: "fix(inventory): refresh Kinsta SSH details for ${{ inputs.TRELLIS_ENVIRONMENT }}"
+          CHECK_NAMES: ${{ inputs.TRELLIS_CI_CHECK_NAMES }}
+          GITHUB_TOKEN: ${{ steps.inventory-bot-token.outputs.token }}
 
       - name: Get environment IP address
         # yamllint disable rule:line-length

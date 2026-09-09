@@ -153,9 +153,15 @@ jobs:
           APP_ID: ${{ secrets.TRELLIS_INVENTORY_BOT_APP_ID }}
           PRIVATE_KEY: ${{ secrets.TRELLIS_INVENTORY_BOT_PRIVATE_KEY }}
           SSH_USER: ${{ inputs.SSH_USER }}
+          SSH_HOST: ${{ inputs.SSH_HOST }}
+          SSH_PORT: ${{ inputs.SSH_PORT }}
         # yamllint disable rule:line-length
         run: |
           set -euo pipefail
+          if [[ -z "$SSH_HOST" || -z "$SSH_PORT" ]]; then
+            echo "SSH_HOST and SSH_PORT must be given together." >&2
+            exit 1
+          fi
           if [[ -z "$APP_ID" || -z "$PRIVATE_KEY" || -z "$SSH_USER" ]]; then
             echo "TRELLIS_INVENTORY_BOT_APP_ID, TRELLIS_INVENTORY_BOT_PRIVATE_KEY, and SSH_USER are required to sync SSH details." >&2
             exit 1

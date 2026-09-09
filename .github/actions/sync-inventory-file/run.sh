@@ -72,7 +72,13 @@ ATTEMPT=0
 
 while true; do
   ALL_PASSED=true
-  CHECK_RUNS_JSON="$(gh api --paginate "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs" --jq '.check_runs')"
+  # --paginate applies --jq once PER PAGE, so a filter that returns the
+  # whole array (`.check_runs`) would yield one array per page instead of
+  # one combined array. Flattening to individual objects (`.check_runs[]`)
+  # means each page just contributes more objects to one flat stream; `jq
+  # -s` (slurp) below reassembles that stream into a single array
+  # regardless of how many pages contributed to it.
+  CHECK_RUNS_JSON="$(gh api --paginate "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs" --jq '.check_runs[]')"
 
   for NAME in "${CHECK_NAMES_ARRAY[@]}"; do
     [[ -z "${NAME//[[:space:]]/}" ]] && continue
@@ -82,7 +88,7 @@ while true; do
     # Only the most recently started instance reflects the current state —
     # an older duplicate can be `cancelled` by a concurrency group while a
     # newer one succeeds, so treat that older run as superseded, not fatal.
-    LATEST_CONCLUSION="$(jq -r --arg name "$NAME" \
+    LATEST_CONCLUSION="$(jq -rs --arg name "$NAME" \
       '([.[] | select(.name == $name)] | sort_by(.started_at) | last) as $run
        | if $run == null then "pending" else ($run.conclusion // "pending") end' \
       <<<"$CHECK_RUNS_JSON")"

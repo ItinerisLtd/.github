@@ -176,12 +176,24 @@ jobs:
         env:
           TRELLIS_REPOSITORY: ${{ inputs.TRELLIS_REPOSITORY }}
           BEDROCK_REPOSITORY: ${{ github.repository }}
+          EXPECTED_OWNER: ${{ github.repository_owner }}
+        # yamllint disable rule:line-length
         run: |
           set -euo pipefail
+          if [[ "$TRELLIS_REPOSITORY" != */* ]]; then
+            echo "TRELLIS_REPOSITORY '$TRELLIS_REPOSITORY' is not in 'owner/repo' format." >&2
+            exit 1
+          fi
+          TRELLIS_OWNER="${TRELLIS_REPOSITORY%%/*}"
+          if [[ "$TRELLIS_OWNER" != "$EXPECTED_OWNER" ]]; then
+            echo "TRELLIS_REPOSITORY's owner '$TRELLIS_OWNER' does not match this workflow's owner '$EXPECTED_OWNER'. The inventory bot App token is minted for a single owner, so a cross-owner Trellis repo is not supported." >&2
+            exit 1
+          fi
           {
             printf 'TRELLIS_REPO_SHORT=%s\n' "${TRELLIS_REPOSITORY#*/}"
             printf 'BEDROCK_REPO_SHORT=%s\n' "${BEDROCK_REPOSITORY#*/}"
           } >>"$GITHUB_OUTPUT"
+        # yamllint enable rule:line-length
 
       - name: Generate inventory bot token
         id: inventory-bot-token

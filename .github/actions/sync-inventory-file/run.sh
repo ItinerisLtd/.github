@@ -33,7 +33,7 @@ gh api "repos/$REPOSITORY/git/refs" \
   -f ref="refs/heads/$BRANCH_NAME" \
   -f sha="$BASE_SHA" >/dev/null
 
-EXISTING_SHA="$(gh api "repos/$REPOSITORY/contents/$FILE_PATH" -f ref="$BRANCH_NAME" --jq '.sha')"
+EXISTING_SHA="$(gh api --method GET "repos/$REPOSITORY/contents/$FILE_PATH" -f ref="$BRANCH_NAME" --jq '.sha')"
 ENCODED_CONTENT="$(base64 -w0 "$CONTENT_FILE")"
 
 gh api --method PUT "repos/$REPOSITORY/contents/$FILE_PATH" \

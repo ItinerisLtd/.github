@@ -47,15 +47,17 @@ on:
         default: ''
       TRELLIS_CI_CHECK_NAMES:
         description: >-
-          Newline-separated required status check contexts on the Trellis
-          repo to wait for before auto-merging the inventory sync PR
+          Newline-separated required check-run names (Checks API, not the
+          legacy Statuses API) on the Trellis repo to wait for before
+          auto-merging the inventory sync PR
         type: string
         required: false
         default: "test (3.x)"
       BEDROCK_CI_CHECK_NAMES:
         description: >-
-          Newline-separated required status check contexts on this repo to
-          wait for before auto-merging the wp-cli alias sync PR
+          Newline-separated required check-run names (Checks API, not the
+          legacy Statuses API) on this repo to wait for before auto-merging
+          the wp-cli alias sync PR
         type: string
         required: false
         default: |-

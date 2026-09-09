@@ -94,8 +94,8 @@ while true; do
       <<<"$CHECK_RUNS_JSON")"
 
     case "$LATEST_CONCLUSION" in
-      success | skipped) ;;
-      failure | cancelled | timed_out | action_required)
+      success | skipped | neutral) ;;
+      failure | cancelled | timed_out | action_required | stale | startup_failure)
         echo "Check '$NAME' concluded '$LATEST_CONCLUSION' on $REPOSITORY PR #$PR_NUMBER." >&2
         exit 1
         ;;

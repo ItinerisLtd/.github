@@ -30,6 +30,13 @@ on:
         type: string
         required: false
         default: ''
+      SSH_USER:
+        description: >-
+          SSH user to write into the Bedrock wp-cli alias, alongside
+          SSH_HOST/SSH_PORT
+        type: string
+        required: false
+        default: ''
       SHARED_ACTIONS_REF:
         description: >-
           Ref of ItinerisLtd/.github holding the composite actions. Required
@@ -38,6 +45,24 @@ on:
         type: string
         required: false
         default: ''
+      TRELLIS_CI_CHECK_NAMES:
+        description: >-
+          Newline-separated required status check contexts on the Trellis
+          repo to wait for before auto-merging the inventory sync PR
+        type: string
+        required: false
+        default: "test (3.x)"
+      BEDROCK_CI_CHECK_NAMES:
+        description: >-
+          Newline-separated required status check contexts on this repo to
+          wait for before auto-merging the wp-cli alias sync PR
+        type: string
+        required: false
+        default: |-
+          mu-plugin / php-style-check
+          theme / php-style-check
+          theme / build-production-assets
+          theme / check-theme-changes
       TRELLIS_REPOSITORY:
         type: string
         required: true
@@ -60,6 +85,10 @@ on:
     secrets:
       REPO_PAT:
         required: true
+      TRELLIS_INVENTORY_BOT_APP_ID:
+        required: false
+      TRELLIS_INVENTORY_BOT_PRIVATE_KEY:
+        required: false
       TRELLIS_DEPLOY_SSH_PRIVATE_KEY:
         required: true
       TRELLIS_DEPLOY_SSH_KNOWN_HOSTS:
@@ -117,6 +146,20 @@ jobs:
             echo "Pass the same ref this workflow is pinned to." >&2
             exit 1
           fi
+
+      - name: Check inventory bot credentials
+        if: ${{ inputs.SSH_HOST != '' || inputs.SSH_PORT != '' }}
+        env:
+          APP_ID: ${{ secrets.TRELLIS_INVENTORY_BOT_APP_ID }}
+          PRIVATE_KEY: ${{ secrets.TRELLIS_INVENTORY_BOT_PRIVATE_KEY }}
+        # yamllint disable rule:line-length
+        run: |
+          set -euo pipefail
+          if [[ -z "$APP_ID" || -z "$PRIVATE_KEY" ]]; then
+            echo "TRELLIS_INVENTORY_BOT_APP_ID and TRELLIS_INVENTORY_BOT_PRIVATE_KEY are required to sync SSH details." >&2
+            exit 1
+          fi
+        # yamllint enable rule:line-length
 
       - name: Checkout shared actions
         if: ${{ inputs.SSH_HOST != '' || inputs.SSH_PORT != '' }}

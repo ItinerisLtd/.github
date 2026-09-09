@@ -20,6 +20,24 @@ on:
       TRELLIS_ENVIRONMENT:
         type: string
         required: true
+      SSH_HOST:
+        description: Override the inventory ansible_host for this deploy
+        type: string
+        required: false
+        default: ''
+      SSH_PORT:
+        description: Override the inventory ansible_port for this deploy
+        type: string
+        required: false
+        default: ''
+      SHARED_ACTIONS_REF:
+        description: >-
+          Ref of ItinerisLtd/.github holding the composite actions. Required
+          only when overriding SSH details; pass the same ref this workflow
+          is pinned to.
+        type: string
+        required: false
+        default: ''
       TRELLIS_REPOSITORY:
         type: string
         required: true
@@ -87,6 +105,36 @@ jobs:
           repository: "${{ inputs.TRELLIS_REPOSITORY }}"
           path: trellis
           token: "${{ secrets.REPO_PAT }}"
+
+      - name: Check shared actions ref
+        if: ${{ inputs.SSH_HOST != '' || inputs.SSH_PORT != '' }}
+        env:
+          SHARED_ACTIONS_REF: ${{ inputs.SHARED_ACTIONS_REF }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SHARED_ACTIONS_REF" ]]; then
+            echo "SHARED_ACTIONS_REF is required to override SSH details." >&2
+            echo "Pass the same ref this workflow is pinned to." >&2
+            exit 1
+          fi
+
+      - name: Checkout shared actions
+        if: ${{ inputs.SSH_HOST != '' || inputs.SSH_PORT != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ItinerisLtd/.github
+          ref: ${{ inputs.SHARED_ACTIONS_REF }}
+          path: .itineris-actions
+          persist-credentials: false
+
+      - name: Override inventory SSH details
+        if: ${{ inputs.SSH_HOST != '' || inputs.SSH_PORT != '' }}
+        uses: ./.itineris-actions/.github/actions/trellis-override-inventory
+        with:
+          SSH_HOST: ${{ inputs.SSH_HOST }}
+          SSH_PORT: ${{ inputs.SSH_PORT }}
+          TRELLIS_ENVIRONMENT: ${{ inputs.TRELLIS_ENVIRONMENT }}
+          HOSTS_FILE: trellis/hosts/${{ inputs.TRELLIS_ENVIRONMENT }}
 
       - name: Get environment IP address
         # yamllint disable rule:line-length

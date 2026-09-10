@@ -232,6 +232,9 @@ jobs:
           repositories: |
             ${{ steps.repo-names.outputs.TRELLIS_REPO_SHORT }}
             ${{ steps.repo-names.outputs.BEDROCK_REPO_SHORT }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-checks: read
 
       - name: Snapshot original Trellis inventory
         id: trellis-snapshot

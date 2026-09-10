@@ -107,20 +107,32 @@ while true; do
   # regardless of how many pages contributed to it.
   CHECK_RUNS_JSON="$(gh api --paginate "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs" --jq '.check_runs[]')"
 
+  # ci.yml can trigger on both push and pull_request for this branch, and
+  # the push-triggered check suite is created first (as soon as we push the
+  # branch), before the PR-triggered one even exists. Without restricting
+  # to our PR's own check suite(s), the push-triggered run alone could
+  # satisfy a required name before the PR-triggered run (the one that
+  # actually reflects this PR) has been observed at all.
+  CHECK_SUITES_JSON="$(gh api --paginate "repos/$REPOSITORY/commits/$HEAD_SHA/check-suites" --jq '.check_suites[]')"
+  PR_SUITE_IDS_JSON="$(jq -s --argjson pr "$PR_NUMBER" \
+    '[.[] | select([.pull_requests[]?.number] | index($pr) != null) | .id]' \
+    <<<"$CHECK_SUITES_JSON")"
+
   for NAME in "${CHECK_NAMES_ARRAY[@]}"; do
     [[ -z "$NAME" ]] && continue
 
     # The same head SHA can carry more than one check-run sharing this name
-    # (e.g. ci.yml triggers on both push and pull_request for this branch).
-    # Only the most recently created instance reflects the current state —
-    # an older duplicate can be `cancelled` by a concurrency group while a
-    # newer one succeeds, so treat that older run as superseded, not fatal.
-    # Sort by `.id` (monotonically increasing) rather than `.started_at`: a
-    # newer duplicate that is still queued has `started_at: null`, which
-    # jq sorts first, not last, so sorting by start time would wrongly pick
-    # an older, already-concluded run as "latest".
-    LATEST_CONCLUSION="$(jq -rs --arg name "$NAME" \
-      '([.[] | select(.name == $name)] | sort_by(.id) | last) as $run
+    # even within our PR's own check suite(s) (e.g. a re-run). Only the most
+    # recently created instance reflects the current state — an older
+    # duplicate can be `cancelled` by a concurrency group while a newer one
+    # succeeds, so treat that older run as superseded, not fatal. Sort by
+    # `.id` (monotonically increasing) rather than `.started_at`: a newer
+    # duplicate that is still queued has `started_at: null`, which jq sorts
+    # first, not last, so sorting by start time would wrongly pick an
+    # older, already-concluded run as "latest".
+    LATEST_CONCLUSION="$(jq -rs --arg name "$NAME" --argjson suites "$PR_SUITE_IDS_JSON" \
+      '([.[] | select(.name == $name) | select(.check_suite.id as $sid | $suites | index($sid) != null)]
+        | sort_by(.id) | last) as $run
        | if $run == null then "pending" else ($run.conclusion // "pending") end' \
       <<<"$CHECK_RUNS_JSON")"
 

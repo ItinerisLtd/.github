@@ -52,7 +52,7 @@ on:
           auto-merging the inventory sync PR
         type: string
         required: false
-        default: "test (3.x)"
+        default: 'test (3.x)'
       BEDROCK_CI_CHECK_NAMES:
         description: >-
           Newline-separated required check-run names (Checks API, not the
@@ -186,6 +186,10 @@ jobs:
             echo "BEDROCK_ALIAS_FILE must be a relative path with no '..' segments." >&2
             exit 1
           fi
+          if ! [[ "$BEDROCK_ALIAS_FILE" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "BEDROCK_ALIAS_FILE contains unexpected characters." >&2
+            exit 1
+          fi
           if ! [[ "$TRELLIS_ENVIRONMENT" =~ ^[a-z0-9_-]+$ ]]; then
             echo "TRELLIS_ENVIRONMENT must be lowercase, containing only letters, numbers, hyphens, and underscores." >&2
             exit 1
@@ -202,7 +206,7 @@ jobs:
         # yamllint disable rule:line-length
         run: |
           set -euo pipefail
-          if [[ "$TRELLIS_REPOSITORY" != */* ]]; then
+          if ! [[ "$TRELLIS_REPOSITORY" =~ ^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$ ]]; then
             echo "TRELLIS_REPOSITORY '$TRELLIS_REPOSITORY' is not in 'owner/repo' format." >&2
             exit 1
           fi

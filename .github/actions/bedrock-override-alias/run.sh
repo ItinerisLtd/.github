@@ -53,8 +53,9 @@ if [[ ! -f "$ALIAS_FILE" ]]; then
   exit 1
 fi
 
-if ! grep -qxF "@$TRELLIS_ENVIRONMENT:" "$ALIAS_FILE"; then
-  echo "No '@$TRELLIS_ENVIRONMENT:' alias block found in $ALIAS_FILE." >&2
+HEADER_COUNT="$(grep -cxF "@$TRELLIS_ENVIRONMENT:" "$ALIAS_FILE" || true)"
+if [[ "$HEADER_COUNT" != "1" ]]; then
+  echo "Expected exactly one '@$TRELLIS_ENVIRONMENT:' header in $ALIAS_FILE, found $HEADER_COUNT." >&2
   exit 1
 fi
 

@@ -36,10 +36,53 @@ on:
         type: string
         required: false
         default: main
+      TRELLIS_REPOSITORY:
+        description: >-
+          owner/repo of the Trellis repository holding this environment's
+          inventory. Leave empty to skip syncing committed SSH details
+          entirely — every step below is a no-op without it.
+        type: string
+        required: false
+        default: ''
+      BEDROCK_ALIAS_FILE:
+        description: >-
+          Path, relative to the calling Bedrock repo root, of the wp-cli
+          Trellis alias file to sync SSH details into. Cognomen-based
+          projects use wp-cli-cognomen.yml instead of the default. Only
+          used when TRELLIS_REPOSITORY is set.
+        type: string
+        required: false
+        default: wp-cli.trellis-alias.yml
+      TRELLIS_CI_CHECK_NAMES:
+        description: >-
+          Newline-separated required check-run names (Checks API, not the
+          legacy Statuses API) on the Trellis repo to wait for before
+          auto-merging the inventory sync PR
+        type: string
+        required: false
+        default: 'test (3.x)'
+      BEDROCK_CI_CHECK_NAMES:
+        description: >-
+          Newline-separated required check-run names (Checks API, not the
+          legacy Statuses API) on the calling repo to wait for before
+          auto-merging the wp-cli alias sync PR
+        type: string
+        required: false
+        default: |-
+          mu-plugin / php-style-check
+          theme / php-style-check
+          theme / build-production-assets
+          theme / check-theme-changes
     secrets:
       KINSTA_API_KEY:
         required: true
       USER_AGENT:
+        required: false
+      REPO_PAT:
+        required: false
+      TRELLIS_INVENTORY_BOT_APP_ID:
+        required: false
+      TRELLIS_INVENTORY_BOT_PRIVATE_KEY:
         required: false
     outputs:
       CREATED:
@@ -163,6 +206,209 @@ jobs:
           ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
           KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
           KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
+
+      - name: Check inventory bot credentials
+        if: >-
+          inputs.TRELLIS_REPOSITORY != ''
+          && inputs.ENVIRONMENT == 'staging'
+        env:
+          APP_ID: ${{ secrets.TRELLIS_INVENTORY_BOT_APP_ID }}
+          PRIVATE_KEY: ${{ secrets.TRELLIS_INVENTORY_BOT_PRIVATE_KEY }}
+          REPO_PAT: ${{ secrets.REPO_PAT }}
+          SSH_USER: ${{ steps.ssh.outputs.SSH_USER }}
+          BEDROCK_ALIAS_FILE: ${{ inputs.BEDROCK_ALIAS_FILE }}
+        # yamllint disable rule:line-length
+        run: |
+          set -euo pipefail
+          if [[ -z "$APP_ID" || -z "$PRIVATE_KEY" || -z "$REPO_PAT" ]]; then
+            echo "TRELLIS_INVENTORY_BOT_APP_ID, TRELLIS_INVENTORY_BOT_PRIVATE_KEY, and REPO_PAT are required to sync SSH details." >&2
+            exit 1
+          fi
+          if [[ -z "$SSH_USER" ]]; then
+            echo "SSH_USER (from Kinsta) is empty; cannot sync SSH details." >&2
+            exit 1
+          fi
+          if ! [[ "$SSH_USER" =~ ^[A-Za-z0-9_-]+$ ]]; then
+            echo "SSH_USER contains unexpected characters." >&2
+            exit 1
+          fi
+          if [[ "$BEDROCK_ALIAS_FILE" == /* || "$BEDROCK_ALIAS_FILE" == *..* ]]; then
+            echo "BEDROCK_ALIAS_FILE must be a relative path with no '..' segments." >&2
+            exit 1
+          fi
+          if ! [[ "$BEDROCK_ALIAS_FILE" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "BEDROCK_ALIAS_FILE contains unexpected characters." >&2
+            exit 1
+          fi
+        # yamllint enable rule:line-length
+
+      - name: Compute repository short names
+        id: repo-names
+        if: >-
+          inputs.TRELLIS_REPOSITORY != ''
+          && inputs.ENVIRONMENT == 'staging'
+        env:
+          TRELLIS_REPOSITORY: ${{ inputs.TRELLIS_REPOSITORY }}
+          BEDROCK_REPOSITORY: ${{ github.repository }}
+          EXPECTED_OWNER: ${{ github.repository_owner }}
+        # yamllint disable rule:line-length
+        run: |
+          set -euo pipefail
+          if ! [[ "$TRELLIS_REPOSITORY" =~ ^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$ ]]; then
+            echo "TRELLIS_REPOSITORY '$TRELLIS_REPOSITORY' is not in 'owner/repo' format." >&2
+            exit 1
+          fi
+          TRELLIS_OWNER="${TRELLIS_REPOSITORY%%/*}"
+          if [[ "$TRELLIS_OWNER" != "$EXPECTED_OWNER" ]]; then
+            echo "TRELLIS_REPOSITORY's owner '$TRELLIS_OWNER' does not match this workflow's owner '$EXPECTED_OWNER'. The inventory bot App token is minted for a single owner, so a cross-owner Trellis repo is not supported." >&2
+            exit 1
+          fi
+          {
+            printf 'TRELLIS_REPO_SHORT=%s\n' "${TRELLIS_REPOSITORY#*/}"
+            printf 'BEDROCK_REPO_SHORT=%s\n' "${BEDROCK_REPOSITORY#*/}"
+          } >>"$GITHUB_OUTPUT"
+        # yamllint enable rule:line-length
+
+      - name: Generate inventory bot token
+        id: inventory-bot-token
+        if: >-
+          inputs.TRELLIS_REPOSITORY != ''
+          && inputs.ENVIRONMENT == 'staging'
+        # yamllint disable-line rule:line-length
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.TRELLIS_INVENTORY_BOT_APP_ID }}
+          private-key: ${{ secrets.TRELLIS_INVENTORY_BOT_PRIVATE_KEY }}
+          repositories: |
+            ${{ steps.repo-names.outputs.TRELLIS_REPO_SHORT }}
+            ${{ steps.repo-names.outputs.BEDROCK_REPO_SHORT }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-checks: read
+
+      - name: Checkout Trellis
+        if: >-
+          inputs.TRELLIS_REPOSITORY != ''
+          && inputs.ENVIRONMENT == 'staging'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ inputs.TRELLIS_REPOSITORY }}
+          path: trellis
+          token: ${{ secrets.REPO_PAT }}
+
+      - name: Snapshot original Trellis inventory
+        id: trellis-snapshot
+        if: >-
+          inputs.TRELLIS_REPOSITORY != ''
+          && inputs.ENVIRONMENT == 'staging'
+        env:
+          ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+        run: cp "trellis/hosts/$ENVIRONMENT" "$RUNNER_TEMP/hosts.orig"
+
+      - name: Override inventory SSH details
+        if: >-
+          inputs.TRELLIS_REPOSITORY != ''
+          && inputs.ENVIRONMENT == 'staging'
+        uses: ./.itineris-actions/.github/actions/trellis-override-inventory
+        with:
+          SSH_HOST: ${{ steps.ssh.outputs.SSH_HOST }}
+          SSH_PORT: ${{ steps.ssh.outputs.SSH_PORT }}
+          TRELLIS_ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+          HOSTS_FILE: trellis/hosts/${{ inputs.ENVIRONMENT }}
+
+      - name: Check if Trellis inventory changed
+        id: trellis-diff
+        if: >-
+          inputs.TRELLIS_REPOSITORY != ''
+          && inputs.ENVIRONMENT == 'staging'
+        env:
+          ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+        # yamllint disable rule:line-length
+        run: |
+          set -euo pipefail
+          if diff -q "$RUNNER_TEMP/hosts.orig" "trellis/hosts/$ENVIRONMENT" >/dev/null; then
+            echo "CHANGED=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "CHANGED=true" >>"$GITHUB_OUTPUT"
+          fi
+        # yamllint enable rule:line-length
+
+      - name: Sync Trellis inventory
+        if: >-
+          inputs.TRELLIS_REPOSITORY != ''
+          && inputs.ENVIRONMENT == 'staging'
+          && steps.trellis-diff.outputs.CHANGED == 'true'
+        uses: ./.itineris-actions/.github/actions/sync-inventory-file
+        with:
+          REPOSITORY: ${{ inputs.TRELLIS_REPOSITORY }}
+          FILE_PATH: hosts/${{ inputs.ENVIRONMENT }}
+          CONTENT_FILE: trellis/hosts/${{ inputs.ENVIRONMENT }}
+          # yamllint disable-line rule:line-length
+          COMMIT_MESSAGE: "chore(hosts): update ${{ inputs.ENVIRONMENT }} SSH details"
+          CHECK_NAMES: ${{ inputs.TRELLIS_CI_CHECK_NAMES }}
+          GITHUB_TOKEN: ${{ steps.inventory-bot-token.outputs.token }}
+
+      - name: Checkout Bedrock
+        if: >-
+          inputs.TRELLIS_REPOSITORY != ''
+          && inputs.ENVIRONMENT == 'staging'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: bedrock
+          persist-credentials: false
+
+      - name: Snapshot original Bedrock alias
+        id: bedrock-snapshot
+        if: >-
+          inputs.TRELLIS_REPOSITORY != ''
+          && inputs.ENVIRONMENT == 'staging'
+        env:
+          BEDROCK_ALIAS_FILE: ${{ inputs.BEDROCK_ALIAS_FILE }}
+        run: cp "bedrock/$BEDROCK_ALIAS_FILE" "$RUNNER_TEMP/alias.orig"
+
+      - name: Override Bedrock alias SSH details
+        if: >-
+          inputs.TRELLIS_REPOSITORY != ''
+          && inputs.ENVIRONMENT == 'staging'
+        uses: ./.itineris-actions/.github/actions/bedrock-override-alias
+        with:
+          SSH_USER: ${{ steps.ssh.outputs.SSH_USER }}
+          SSH_HOST: ${{ steps.ssh.outputs.SSH_HOST }}
+          SSH_PORT: ${{ steps.ssh.outputs.SSH_PORT }}
+          TRELLIS_ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+          ALIAS_FILE: bedrock/${{ inputs.BEDROCK_ALIAS_FILE }}
+
+      - name: Check if Bedrock alias changed
+        id: bedrock-diff
+        if: >-
+          inputs.TRELLIS_REPOSITORY != ''
+          && inputs.ENVIRONMENT == 'staging'
+        env:
+          BEDROCK_ALIAS_FILE: ${{ inputs.BEDROCK_ALIAS_FILE }}
+        # yamllint disable rule:line-length
+        run: |
+          set -euo pipefail
+          if diff -q "$RUNNER_TEMP/alias.orig" "bedrock/$BEDROCK_ALIAS_FILE" >/dev/null; then
+            echo "CHANGED=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "CHANGED=true" >>"$GITHUB_OUTPUT"
+          fi
+        # yamllint enable rule:line-length
+
+      - name: Sync Bedrock alias
+        if: >-
+          inputs.TRELLIS_REPOSITORY != ''
+          && inputs.ENVIRONMENT == 'staging'
+          && steps.bedrock-diff.outputs.CHANGED == 'true'
+        uses: ./.itineris-actions/.github/actions/sync-inventory-file
+        with:
+          REPOSITORY: ${{ github.repository }}
+          FILE_PATH: ${{ inputs.BEDROCK_ALIAS_FILE }}
+          CONTENT_FILE: bedrock/${{ inputs.BEDROCK_ALIAS_FILE }}
+          # yamllint disable-line rule:line-length
+          COMMIT_MESSAGE: "chore(hosts): update ${{ inputs.ENVIRONMENT }} SSH alias"
+          CHECK_NAMES: ${{ inputs.BEDROCK_CI_CHECK_NAMES }}
+          GITHUB_TOKEN: ${{ steps.inventory-bot-token.outputs.token }}
 
       - name: Build summary outputs
         id: summary

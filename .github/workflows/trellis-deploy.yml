@@ -65,6 +65,14 @@ on:
           theme / php-style-check
           theme / build-production-assets
           theme / check-theme-changes
+      BEDROCK_ALIAS_FILE:
+        description: >-
+          Path, relative to the Bedrock repo root, of the wp-cli Trellis
+          alias file to sync SSH details into. Cognomen-based projects use
+          wp-cli-cognomen.yml instead of the default.
+        type: string
+        required: false
+        default: wp-cli.trellis-alias.yml
       TRELLIS_REPOSITORY:
         type: string
         required: true
@@ -279,7 +287,8 @@ jobs:
       - name: Snapshot original Bedrock alias
         id: bedrock-snapshot
         if: ${{ inputs.SSH_HOST != '' || inputs.SSH_PORT != '' }}
-        run: cp "bedrock/wp-cli.trellis-alias.yml" "$RUNNER_TEMP/alias.orig"
+        # yamllint disable-line rule:line-length
+        run: cp "bedrock/${{ inputs.BEDROCK_ALIAS_FILE }}" "$RUNNER_TEMP/alias.orig"
 
       - name: Override Bedrock alias SSH details
         if: ${{ inputs.SSH_HOST != '' || inputs.SSH_PORT != '' }}
@@ -289,7 +298,7 @@ jobs:
           SSH_HOST: ${{ inputs.SSH_HOST }}
           SSH_PORT: ${{ inputs.SSH_PORT }}
           TRELLIS_ENVIRONMENT: ${{ inputs.TRELLIS_ENVIRONMENT }}
-          ALIAS_FILE: bedrock/wp-cli.trellis-alias.yml
+          ALIAS_FILE: bedrock/${{ inputs.BEDROCK_ALIAS_FILE }}
 
       - name: Check if Bedrock alias changed
         id: bedrock-diff
@@ -297,7 +306,7 @@ jobs:
         # yamllint disable rule:line-length
         run: |
           set -euo pipefail
-          if diff -q "$RUNNER_TEMP/alias.orig" "bedrock/wp-cli.trellis-alias.yml" >/dev/null; then
+          if diff -q "$RUNNER_TEMP/alias.orig" "bedrock/${{ inputs.BEDROCK_ALIAS_FILE }}" >/dev/null; then
             echo "CHANGED=false" >>"$GITHUB_OUTPUT"
           else
             echo "CHANGED=true" >>"$GITHUB_OUTPUT"
@@ -311,8 +320,8 @@ jobs:
         uses: ./.itineris-actions/.github/actions/sync-inventory-file
         with:
           REPOSITORY: ${{ github.repository }}
-          FILE_PATH: wp-cli.trellis-alias.yml
-          CONTENT_FILE: bedrock/wp-cli.trellis-alias.yml
+          FILE_PATH: ${{ inputs.BEDROCK_ALIAS_FILE }}
+          CONTENT_FILE: bedrock/${{ inputs.BEDROCK_ALIAS_FILE }}
           # yamllint disable-line rule:line-length
           COMMIT_MESSAGE: "fix(inventory): refresh Kinsta SSH alias for ${{ inputs.TRELLIS_ENVIRONMENT }}"
           CHECK_NAMES: ${{ inputs.BEDROCK_CI_CHECK_NAMES }}

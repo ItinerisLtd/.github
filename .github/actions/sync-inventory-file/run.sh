@@ -57,6 +57,22 @@ gh api "repos/$REPOSITORY/git/refs" \
   -f ref="refs/heads/$BRANCH_NAME" \
   -f sha="$BASE_SHA" >/dev/null
 
+# Any failure from here on (a bad commit, a check that fails or times out, a
+# merge that doesn't complete) would otherwise leave the branch and PR
+# behind. Clean them up on any non-zero exit; a successful run reaches its
+# own explicit exit 0 without ever hitting this trap's cleanup body.
+cleanup_on_failure() {
+  local exit_code=$?
+  if ((exit_code != 0)); then
+    if [[ -n "${PR_NUMBER:-}" ]]; then
+      gh api --method PATCH "repos/$REPOSITORY/pulls/$PR_NUMBER" -f state="closed" >/dev/null 2>&1 || true
+    fi
+    gh api --method DELETE "repos/$REPOSITORY/git/refs/heads/$BRANCH_NAME" >/dev/null 2>&1 || true
+  fi
+  exit "$exit_code"
+}
+trap cleanup_on_failure EXIT
+
 EXISTING_SHA="$(gh api --method GET "repos/$REPOSITORY/contents/$FILE_PATH" -f ref="$BRANCH_NAME" --jq '.sha')"
 ENCODED_CONTENT="$(base64 -w0 "$CONTENT_FILE")"
 
@@ -133,10 +149,15 @@ while true; do
   sleep "$SLEEP_SECONDS"
 done
 
-gh api --method PUT "repos/$REPOSITORY/pulls/$PR_NUMBER/merge" \
+MERGE_RESULT="$(gh api --method PUT "repos/$REPOSITORY/pulls/$PR_NUMBER/merge" \
   -f merge_method="squash" \
   -f commit_title="$COMMIT_MESSAGE" \
-  -f commit_message="[cd skip]" >/dev/null
+  -f commit_message="[cd skip]")"
+
+if [[ "$(jq -r '.merged' <<<"$MERGE_RESULT")" != "true" ]]; then
+  echo "Merge did not complete for $REPOSITORY PR #$PR_NUMBER: $(jq -r '.message // "unknown reason"' <<<"$MERGE_RESULT")" >&2
+  exit 1
+fi
 
 gh api --method DELETE "repos/$REPOSITORY/git/refs/heads/$BRANCH_NAME" >/dev/null || true
 

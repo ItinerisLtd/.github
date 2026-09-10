@@ -178,6 +178,10 @@ jobs:
             echo "TRELLIS_INVENTORY_BOT_APP_ID, TRELLIS_INVENTORY_BOT_PRIVATE_KEY, and SSH_USER are required to sync SSH details." >&2
             exit 1
           fi
+          if ! [[ "$SSH_USER" =~ ^[A-Za-z0-9_-]+$ ]]; then
+            echo "SSH_USER contains unexpected characters." >&2
+            exit 1
+          fi
           if [[ "$BEDROCK_ALIAS_FILE" == /* || "$BEDROCK_ALIAS_FILE" == *..* ]]; then
             echo "BEDROCK_ALIAS_FILE must be a relative path with no '..' segments." >&2
             exit 1

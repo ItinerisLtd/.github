@@ -74,8 +74,9 @@ NEW_SSH="$SSH_USER@$SSH_HOST:$SSH_PORT"
 awk -v env="@$TRELLIS_ENVIRONMENT:" -v newssh="$NEW_SSH" '
   $0 == env { in_block=1; print; next }
   in_block && /^@[^[:space:]]/ { in_block=0 }
-  in_block && /^[[:space:]]+ssh:/ {
-    print "  ssh: \"" newssh "\""
+  in_block && match($0, /^[[:space:]]+ssh:/) {
+    indent = substr($0, 1, RLENGTH - 4)
+    print indent "ssh: \"" newssh "\""
     next
   }
   { print }

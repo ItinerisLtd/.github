@@ -350,7 +350,7 @@ jobs:
           FILE_PATH: ${{ inputs.BEDROCK_ALIAS_FILE }}
           CONTENT_FILE: bedrock/${{ inputs.BEDROCK_ALIAS_FILE }}
           # yamllint disable-line rule:line-length
-          COMMIT_MESSAGE: "fix(inventory): refresh Kinsta SSH alias for ${{ inputs.TRELLIS_ENVIRONMENT }}"
+          COMMIT_MESSAGE: "chore(hosts): update ${{ inputs.TRELLIS_ENVIRONMENT }} SSH alias"
           CHECK_NAMES: ${{ inputs.BEDROCK_CI_CHECK_NAMES }}
           GITHUB_TOKEN: ${{ steps.inventory-bot-token.outputs.token }}
 

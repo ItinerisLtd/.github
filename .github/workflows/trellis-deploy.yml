@@ -166,6 +166,7 @@ jobs:
           SSH_HOST: ${{ inputs.SSH_HOST }}
           SSH_PORT: ${{ inputs.SSH_PORT }}
           BEDROCK_ALIAS_FILE: ${{ inputs.BEDROCK_ALIAS_FILE }}
+          TRELLIS_ENVIRONMENT: ${{ inputs.TRELLIS_ENVIRONMENT }}
         # yamllint disable rule:line-length
         run: |
           set -euo pipefail
@@ -179,6 +180,10 @@ jobs:
           fi
           if [[ "$BEDROCK_ALIAS_FILE" == /* || "$BEDROCK_ALIAS_FILE" == *..* ]]; then
             echo "BEDROCK_ALIAS_FILE must be a relative path with no '..' segments." >&2
+            exit 1
+          fi
+          if ! [[ "$TRELLIS_ENVIRONMENT" =~ ^[A-Za-z0-9_-]+$ ]]; then
+            echo "TRELLIS_ENVIRONMENT must contain only letters, numbers, hyphens, and underscores." >&2
             exit 1
           fi
         # yamllint enable rule:line-length

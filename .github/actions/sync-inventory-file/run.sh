@@ -152,7 +152,8 @@ done
 MERGE_RESULT="$(gh api --method PUT "repos/$REPOSITORY/pulls/$PR_NUMBER/merge" \
   -f merge_method="squash" \
   -f commit_title="$COMMIT_MESSAGE" \
-  -f commit_message="[cd skip]")"
+  -f commit_message="[cd skip]" \
+  -f sha="$HEAD_SHA")"
 
 if [[ "$(jq -r '.merged' <<<"$MERGE_RESULT")" != "true" ]]; then
   echo "Merge did not complete for $REPOSITORY PR #$PR_NUMBER: $(jq -r '.message // "unknown reason"' <<<"$MERGE_RESULT")" >&2

@@ -286,7 +286,7 @@ jobs:
           FILE_PATH: hosts/${{ inputs.TRELLIS_ENVIRONMENT }}
           CONTENT_FILE: trellis/hosts/${{ inputs.TRELLIS_ENVIRONMENT }}
           # yamllint disable-line rule:line-length
-          COMMIT_MESSAGE: "fix(inventory): refresh Kinsta SSH details for ${{ inputs.TRELLIS_ENVIRONMENT }}"
+          COMMIT_MESSAGE: "chore(hosts): update ${{ inputs.TRELLIS_ENVIRONMENT }} SSH details"
           CHECK_NAMES: ${{ inputs.TRELLIS_CI_CHECK_NAMES }}
           GITHUB_TOKEN: ${{ steps.inventory-bot-token.outputs.token }}
 

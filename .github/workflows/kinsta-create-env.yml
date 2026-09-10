@@ -398,7 +398,7 @@ jobs:
           FILE_PATH: ${{ inputs.BEDROCK_ALIAS_FILE }}
           CONTENT_FILE: bedrock/${{ inputs.BEDROCK_ALIAS_FILE }}
           # yamllint disable-line rule:line-length
-          COMMIT_MESSAGE: "chore(hosts): update ${{ inputs.ENVIRONMENT }} SSH alias"
+          COMMIT_MESSAGE: "chore(alias): update ${{ inputs.ENVIRONMENT }} SSH alias"
           CHECK_NAMES: ${{ inputs.BEDROCK_CI_CHECK_NAMES }}
           GITHUB_TOKEN: ${{ steps.inventory-bot-token.outputs.token }}
 

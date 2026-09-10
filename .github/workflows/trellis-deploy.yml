@@ -317,7 +317,6 @@ jobs:
           COMMIT_MESSAGE: "fix(inventory): refresh Kinsta SSH alias for ${{ inputs.TRELLIS_ENVIRONMENT }}"
           CHECK_NAMES: ${{ inputs.BEDROCK_CI_CHECK_NAMES }}
           GITHUB_TOKEN: ${{ steps.inventory-bot-token.outputs.token }}
-          BASE_BRANCH: ${{ inputs.BEDROCK_DEPLOY_BRANCH }}
 
       - name: Configure git auth for org packages
         # yamllint disable rule:line-length

@@ -40,7 +40,9 @@ on:
         description: >-
           owner/repo of the Trellis repository holding this environment's
           inventory. Leave empty to skip syncing committed SSH details
-          entirely — every step below is a no-op without it.
+          entirely, or the sync steps are a no-op without it. The sync
+          also only runs when ENVIRONMENT is exactly 'staging', regardless
+          of this value.
         type: string
         required: false
         default: ''
@@ -130,6 +132,15 @@ jobs:
       SSH_USER: ${{ steps.summary.outputs.SSH_USER }}
       SSH_HOST: ${{ steps.summary.outputs.SSH_HOST }}
       SSH_PORT: ${{ steps.summary.outputs.SSH_PORT }}
+    env:
+      # Single source of truth for whether the SSH inventory sync steps
+      # below run, since GitHub Actions has no way to share a computed
+      # if: expression across steps other than a job-level env var.
+      # inputs.* is available here since it's resolved before the job
+      # starts, unlike steps.* outputs.
+      SYNC_ENABLED: >-
+        ${{ inputs.TRELLIS_REPOSITORY != ''
+        && inputs.ENVIRONMENT == 'staging' }}
     steps:
       - name: Reject production environments
         env:
@@ -208,20 +219,23 @@ jobs:
           KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
 
       - name: Check inventory bot credentials
-        if: >-
-          inputs.TRELLIS_REPOSITORY != ''
-          && inputs.ENVIRONMENT == 'staging'
+        if: env.SYNC_ENABLED == 'true'
         env:
           APP_ID: ${{ secrets.TRELLIS_INVENTORY_BOT_APP_ID }}
           PRIVATE_KEY: ${{ secrets.TRELLIS_INVENTORY_BOT_PRIVATE_KEY }}
           REPO_PAT: ${{ secrets.REPO_PAT }}
           SSH_USER: ${{ steps.ssh.outputs.SSH_USER }}
           BEDROCK_ALIAS_FILE: ${{ inputs.BEDROCK_ALIAS_FILE }}
+          ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
         # yamllint disable rule:line-length
         run: |
           set -euo pipefail
           if [[ -z "$APP_ID" || -z "$PRIVATE_KEY" || -z "$REPO_PAT" ]]; then
             echo "TRELLIS_INVENTORY_BOT_APP_ID, TRELLIS_INVENTORY_BOT_PRIVATE_KEY, and REPO_PAT are required to sync SSH details." >&2
+            exit 1
+          fi
+          if ! [[ "$ENVIRONMENT" =~ ^[a-z0-9_-]+$ ]]; then
+            echo "ENVIRONMENT must be lowercase, containing only letters, numbers, hyphens, and underscores, to sync SSH details (GitHub Actions' == is case-insensitive, but the filesystem paths this value feeds into are not)." >&2
             exit 1
           fi
           if [[ -z "$SSH_USER" ]]; then
@@ -244,9 +258,7 @@ jobs:
 
       - name: Compute repository short names
         id: repo-names
-        if: >-
-          inputs.TRELLIS_REPOSITORY != ''
-          && inputs.ENVIRONMENT == 'staging'
+        if: env.SYNC_ENABLED == 'true'
         env:
           TRELLIS_REPOSITORY: ${{ inputs.TRELLIS_REPOSITORY }}
           BEDROCK_REPOSITORY: ${{ github.repository }}
@@ -259,7 +271,7 @@ jobs:
             exit 1
           fi
           TRELLIS_OWNER="${TRELLIS_REPOSITORY%%/*}"
-          if [[ "$TRELLIS_OWNER" != "$EXPECTED_OWNER" ]]; then
+          if [[ "${TRELLIS_OWNER,,}" != "${EXPECTED_OWNER,,}" ]]; then
             echo "TRELLIS_REPOSITORY's owner '$TRELLIS_OWNER' does not match this workflow's owner '$EXPECTED_OWNER'. The inventory bot App token is minted for a single owner, so a cross-owner Trellis repo is not supported." >&2
             exit 1
           fi
@@ -271,9 +283,7 @@ jobs:
 
       - name: Generate inventory bot token
         id: inventory-bot-token
-        if: >-
-          inputs.TRELLIS_REPOSITORY != ''
-          && inputs.ENVIRONMENT == 'staging'
+        if: env.SYNC_ENABLED == 'true'
         # yamllint disable-line rule:line-length
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
@@ -287,9 +297,7 @@ jobs:
           permission-checks: read
 
       - name: Checkout Trellis
-        if: >-
-          inputs.TRELLIS_REPOSITORY != ''
-          && inputs.ENVIRONMENT == 'staging'
+        if: env.SYNC_ENABLED == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ${{ inputs.TRELLIS_REPOSITORY }}
@@ -298,17 +306,13 @@ jobs:
 
       - name: Snapshot original Trellis inventory
         id: trellis-snapshot
-        if: >-
-          inputs.TRELLIS_REPOSITORY != ''
-          && inputs.ENVIRONMENT == 'staging'
+        if: env.SYNC_ENABLED == 'true'
         env:
           ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
         run: cp "trellis/hosts/$ENVIRONMENT" "$RUNNER_TEMP/hosts.orig"
 
       - name: Override inventory SSH details
-        if: >-
-          inputs.TRELLIS_REPOSITORY != ''
-          && inputs.ENVIRONMENT == 'staging'
+        if: env.SYNC_ENABLED == 'true'
         uses: ./.itineris-actions/.github/actions/trellis-override-inventory
         with:
           SSH_HOST: ${{ steps.ssh.outputs.SSH_HOST }}
@@ -318,9 +322,7 @@ jobs:
 
       - name: Check if Trellis inventory changed
         id: trellis-diff
-        if: >-
-          inputs.TRELLIS_REPOSITORY != ''
-          && inputs.ENVIRONMENT == 'staging'
+        if: env.SYNC_ENABLED == 'true'
         env:
           ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
         # yamllint disable rule:line-length
@@ -335,8 +337,7 @@ jobs:
 
       - name: Sync Trellis inventory
         if: >-
-          inputs.TRELLIS_REPOSITORY != ''
-          && inputs.ENVIRONMENT == 'staging'
+          env.SYNC_ENABLED == 'true'
           && steps.trellis-diff.outputs.CHANGED == 'true'
         uses: ./.itineris-actions/.github/actions/sync-inventory-file
         with:
@@ -349,9 +350,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.inventory-bot-token.outputs.token }}
 
       - name: Checkout Bedrock
-        if: >-
-          inputs.TRELLIS_REPOSITORY != ''
-          && inputs.ENVIRONMENT == 'staging'
+        if: env.SYNC_ENABLED == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: bedrock
@@ -359,17 +358,13 @@ jobs:
 
       - name: Snapshot original Bedrock alias
         id: bedrock-snapshot
-        if: >-
-          inputs.TRELLIS_REPOSITORY != ''
-          && inputs.ENVIRONMENT == 'staging'
+        if: env.SYNC_ENABLED == 'true'
         env:
           BEDROCK_ALIAS_FILE: ${{ inputs.BEDROCK_ALIAS_FILE }}
         run: cp "bedrock/$BEDROCK_ALIAS_FILE" "$RUNNER_TEMP/alias.orig"
 
       - name: Override Bedrock alias SSH details
-        if: >-
-          inputs.TRELLIS_REPOSITORY != ''
-          && inputs.ENVIRONMENT == 'staging'
+        if: env.SYNC_ENABLED == 'true'
         uses: ./.itineris-actions/.github/actions/bedrock-override-alias
         with:
           SSH_USER: ${{ steps.ssh.outputs.SSH_USER }}
@@ -380,9 +375,7 @@ jobs:
 
       - name: Check if Bedrock alias changed
         id: bedrock-diff
-        if: >-
-          inputs.TRELLIS_REPOSITORY != ''
-          && inputs.ENVIRONMENT == 'staging'
+        if: env.SYNC_ENABLED == 'true'
         env:
           BEDROCK_ALIAS_FILE: ${{ inputs.BEDROCK_ALIAS_FILE }}
         # yamllint disable rule:line-length
@@ -397,8 +390,7 @@ jobs:
 
       - name: Sync Bedrock alias
         if: >-
-          inputs.TRELLIS_REPOSITORY != ''
-          && inputs.ENVIRONMENT == 'staging'
+          env.SYNC_ENABLED == 'true'
           && steps.bedrock-diff.outputs.CHANGED == 'true'
         uses: ./.itineris-actions/.github/actions/sync-inventory-file
         with:
@@ -412,6 +404,10 @@ jobs:
 
       - name: Build summary outputs
         id: summary
+        # Run even if an earlier step (e.g. the SSH sync) failed, so a
+        # sync failure doesn't also discard the environment/domain/SSH
+        # outputs that already succeeded earlier in this same job.
+        if: ${{ !cancelled() }}
         env:
           CREATED: ${{ steps.environment.outputs.CREATED }}
           ENVIRONMENT_ID: ${{ steps.environment.outputs.ENVIRONMENT_ID }}

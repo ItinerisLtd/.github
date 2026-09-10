@@ -15,7 +15,7 @@ fi
 TRELLIS_ENV_NORMALISED="$(tr '[:upper:]' '[:lower:]' <<<"$TRELLIS_ENVIRONMENT")"
 read -r TRELLIS_ENV_NORMALISED <<<"$TRELLIS_ENV_NORMALISED"
 # Use the normalised value for every subsequent block lookup, not just the
-# guard below — otherwise a caller passing e.g. "Staging" would pass the
+# guard below, otherwise a caller passing e.g. "Staging" would pass the
 # guard (which does normalise) but then fail to find "@staging:" in the
 # file (which wouldn't).
 TRELLIS_ENVIRONMENT="$TRELLIS_ENV_NORMALISED"
@@ -33,8 +33,8 @@ if ! [[ "$SSH_HOST" =~ ^${IPV4_OCTET}(\.${IPV4_OCTET}){3}$ ]]; then
   exit 1
 fi
 
-if ! [[ "$SSH_PORT" =~ ^[0-9]+$ ]]; then
-  echo "SSH_PORT '$SSH_PORT' is not a number." >&2
+if ! [[ "$SSH_PORT" =~ ^[0-9]{1,5}$ ]]; then
+  echo "SSH_PORT '$SSH_PORT' is not a number (or has too many digits for a valid port)." >&2
   exit 1
 fi
 
@@ -52,6 +52,12 @@ if [[ ! -f "$ALIAS_FILE" ]]; then
   echo "$ALIAS_FILE does not exist." >&2
   exit 1
 fi
+
+# Normalise CRLF to LF before any exact-line matching below: grep -x and
+# awk's $0 == env both compare the whole line including a trailing \r,
+# so a CRLF-saved file would otherwise never match "@$TRELLIS_ENVIRONMENT:"
+# even though the header is present.
+sed -i 's/\r$//' "$ALIAS_FILE"
 
 HEADER_COUNT="$(grep -cxF "@$TRELLIS_ENVIRONMENT:" "$ALIAS_FILE" || true)"
 if [[ "$HEADER_COUNT" != "1" ]]; then
@@ -85,7 +91,7 @@ awk -v env="@$TRELLIS_ENVIRONMENT:" -v newssh="$NEW_SSH" '
 mv "$ALIAS_FILE.tmp" "$ALIAS_FILE"
 
 # Scope the success check to the target block specifically, not the whole
-# file — otherwise a coincidentally identical ssh value already present in
+# file, otherwise a coincidentally identical ssh value already present in
 # a different environment's block would mask a failed rewrite here.
 BLOCK_CONTENT="$(awk -v env="@$TRELLIS_ENVIRONMENT:" '
   $0 == env { in_block=1; print; next }

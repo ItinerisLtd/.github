@@ -123,7 +123,7 @@ while true; do
 
     # The same head SHA can carry more than one check-run sharing this name
     # even within our PR's own check suite(s) (e.g. a re-run). Only the most
-    # recently created instance reflects the current state — an older
+    # recently created instance reflects the current state; an older
     # duplicate can be `cancelled` by a concurrency group while a newer one
     # succeeds, so treat that older run as superseded, not fatal. Sort by
     # `.id` (monotonically increasing) rather than `.started_at`: a newer

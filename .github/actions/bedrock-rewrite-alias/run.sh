@@ -21,8 +21,8 @@ read -r TRELLIS_ENV_NORMALISED <<<"$TRELLIS_ENV_NORMALISED"
 TRELLIS_ENVIRONMENT="$TRELLIS_ENV_NORMALISED"
 case "$TRELLIS_ENV_NORMALISED" in
   live | production)
-    echo "Refusing to override SSH alias for '$TRELLIS_ENVIRONMENT'." >&2
-    echo "This override is for non-production environments only." >&2
+    echo "Refusing to rewrite SSH alias for '$TRELLIS_ENVIRONMENT'." >&2
+    echo "This rewrite is for non-production environments only." >&2
     exit 1
     ;;
 esac

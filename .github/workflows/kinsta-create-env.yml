@@ -311,9 +311,9 @@ jobs:
           ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
         run: cp "trellis/hosts/$ENVIRONMENT" "$RUNNER_TEMP/hosts.orig"
 
-      - name: Override inventory SSH details
+      - name: Rewrite Trellis inventory SSH details
         if: env.SYNC_ENABLED == 'true'
-        uses: ./.itineris-actions/.github/actions/trellis-override-inventory
+        uses: ./.itineris-actions/.github/actions/trellis-rewrite-inventory
         with:
           SSH_HOST: ${{ steps.ssh.outputs.SSH_HOST }}
           SSH_PORT: ${{ steps.ssh.outputs.SSH_PORT }}
@@ -363,9 +363,9 @@ jobs:
           BEDROCK_ALIAS_FILE: ${{ inputs.BEDROCK_ALIAS_FILE }}
         run: cp "bedrock/$BEDROCK_ALIAS_FILE" "$RUNNER_TEMP/alias.orig"
 
-      - name: Override Bedrock alias SSH details
+      - name: Rewrite Bedrock alias SSH details
         if: env.SYNC_ENABLED == 'true'
-        uses: ./.itineris-actions/.github/actions/bedrock-override-alias
+        uses: ./.itineris-actions/.github/actions/bedrock-rewrite-alias
         with:
           SSH_USER: ${{ steps.ssh.outputs.SSH_USER }}
           SSH_HOST: ${{ steps.ssh.outputs.SSH_HOST }}

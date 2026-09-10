@@ -1,5 +1,5 @@
 ---
-name: bedrock-override-alias
+name: bedrock-rewrite-alias
 description: Update SSH details in a Bedrock wp-cli Trellis alias file
 inputs:
   SSH_USER:

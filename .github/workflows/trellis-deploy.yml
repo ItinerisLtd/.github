@@ -21,19 +21,19 @@ on:
         type: string
         required: true
       SSH_HOST:
-        description: Override the inventory ansible_host for this deploy
+        description: Rewrite the inventory ansible_host for this deploy only
         type: string
         required: false
         default: ''
       SSH_PORT:
-        description: Override the inventory ansible_port for this deploy
+        description: Rewrite the inventory ansible_port for this deploy only
         type: string
         required: false
         default: ''
       SHARED_ACTIONS_REF:
         description: >-
           Ref of ItinerisLtd/.github holding the composite actions. Required
-          only when overriding SSH details; pass the same ref this workflow
+          only when rewriting SSH details; pass the same ref this workflow
           is pinned to.
         type: string
         required: false
@@ -113,7 +113,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "$SHARED_ACTIONS_REF" ]]; then
-            echo "SHARED_ACTIONS_REF is required to override SSH details." >&2
+            echo "SHARED_ACTIONS_REF is required to rewrite SSH details." >&2
             echo "Pass the same ref this workflow is pinned to." >&2
             exit 1
           fi
@@ -127,9 +127,9 @@ jobs:
           path: .itineris-actions
           persist-credentials: false
 
-      - name: Override inventory SSH details
+      - name: Rewrite inventory SSH details (this run only)
         if: ${{ inputs.SSH_HOST != '' || inputs.SSH_PORT != '' }}
-        uses: ./.itineris-actions/.github/actions/trellis-override-inventory
+        uses: ./.itineris-actions/.github/actions/trellis-rewrite-inventory
         with:
           SSH_HOST: ${{ inputs.SSH_HOST }}
           SSH_PORT: ${{ inputs.SSH_PORT }}

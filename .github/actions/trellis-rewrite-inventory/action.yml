@@ -1,5 +1,5 @@
 ---
-name: trellis-override-inventory
+name: trellis-rewrite-inventory
 description: Rewrite the SSH connection details in a Trellis inventory file
 inputs:
   SSH_HOST:

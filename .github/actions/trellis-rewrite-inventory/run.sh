@@ -15,8 +15,8 @@ TRELLIS_ENV_NORMALISED="$(tr '[:upper:]' '[:lower:]' <<<"$TRELLIS_ENVIRONMENT")"
 read -r TRELLIS_ENV_NORMALISED <<<"$TRELLIS_ENV_NORMALISED"
 case "$TRELLIS_ENV_NORMALISED" in
   live | production)
-    echo "Refusing to override SSH details for '$TRELLIS_ENVIRONMENT'." >&2
-    echo "This override is for non-production environments only." >&2
+    echo "Refusing to rewrite SSH details for '$TRELLIS_ENVIRONMENT'." >&2
+    echo "This rewrite is for non-production environments only." >&2
     exit 1
     ;;
 esac

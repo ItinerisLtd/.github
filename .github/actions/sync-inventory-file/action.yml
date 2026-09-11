@@ -1,0 +1,40 @@
+---
+name: sync-inventory-file
+description: >-
+  Commit a locally computed file to a new branch, open a PR, wait for its
+  required checks, then merge
+inputs:
+  REPOSITORY:
+    required: true
+  FILE_PATH:
+    required: true
+  CONTENT_FILE:
+    required: true
+  COMMIT_MESSAGE:
+    required: true
+  CHECK_NAMES:
+    required: true
+  GITHUB_TOKEN:
+    required: true
+  BASE_BRANCH:
+    description: >-
+      Branch to base the sync branch on and open the PR against. Leave empty
+      to auto-resolve the repository's default branch.
+    required: false
+outputs:
+  PR_NUMBER:
+    value: ${{ steps.run.outputs.PR_NUMBER }}
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      run: bash "${{ github.action_path }}/run.sh"
+      env:
+        INPUT_REPOSITORY: ${{ inputs.REPOSITORY }}
+        INPUT_FILE_PATH: ${{ inputs.FILE_PATH }}
+        INPUT_CONTENT_FILE: ${{ inputs.CONTENT_FILE }}
+        INPUT_COMMIT_MESSAGE: ${{ inputs.COMMIT_MESSAGE }}
+        INPUT_CHECK_NAMES: ${{ inputs.CHECK_NAMES }}
+        INPUT_BASE_BRANCH: ${{ inputs.BASE_BRANCH }}
+        GH_TOKEN: ${{ inputs.GITHUB_TOKEN }}

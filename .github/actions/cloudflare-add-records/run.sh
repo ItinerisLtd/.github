@@ -51,7 +51,14 @@ cf_api() {
 
   STATUS_CODE="$(curl "${ARGS[@]}" "$URL")" || true
 
-  if [[ "$STATUS_CODE" != "200" && "$STATUS_CODE" != "201" ]]; then
+  # Cloudflare can answer 200 with "success": false, so the status alone is not
+  # enough to call a write applied. A non-JSON body leaves this as true and the
+  # status check below is what rejects it.
+  local SUCCESS
+  SUCCESS="$(jq -r 'if type == "object" and has("success") then .success else true end' \
+    "$RESPONSE_FILE" 2>/dev/null)" || SUCCESS=true
+
+  if [[ "$STATUS_CODE" != "200" && "$STATUS_CODE" != "201" ]] || [[ "$SUCCESS" != "true" ]]; then
     echo "Cloudflare $LABEL failed with HTTP ${STATUS_CODE:-000}" >&2
 
     local ERRORS

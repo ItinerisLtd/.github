@@ -79,9 +79,9 @@ on:
       KINSTA_API_KEY:
         required: true
       CLOUDFLARE_API_TOKEN:
-        required: true
+        required: false
       CLOUDFLARE_ZONE_ID_DEV:
-        required: true
+        required: false
       USER_AGENT:
         required: false
       REPO_PAT:
@@ -149,6 +149,9 @@ jobs:
       SYNC_ENABLED: >-
         ${{ inputs.TRELLIS_REPOSITORY != ''
         && inputs.ENVIRONMENT == 'staging' }}
+      CLOUDFLARE_ENABLED: >-
+        ${{ secrets.CLOUDFLARE_API_TOKEN != ''
+        && secrets.CLOUDFLARE_ZONE_ID_DEV != '' }}
     steps:
       - name: Reject production environments
         env:
@@ -200,25 +203,38 @@ jobs:
 
       - name: Collect DNS records from Kinsta
         id: records
-        if: ${{ steps.domain.outputs.DOMAIN_ID != '' }}
+        if: >-
+          env.CLOUDFLARE_ENABLED == 'true'
+          && steps.domain.outputs.DOMAIN_ID != ''
         uses: ./.itineris-actions/.github/actions/kinsta-collect-dns-records
         with:
           DOMAIN_ID: ${{ steps.domain.outputs.DOMAIN_ID }}
-          PRIMARY_DOMAIN: ${{ steps.domain.outputs.PRIMARY_DOMAIN }}
           KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
           KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
 
       - name: Add DNS records to Cloudflare
         id: dns
         if: >-
-          ${{ steps.domain.outputs.RECORDS_JSON != ''
-          && steps.records.outputs.DNS_READY != 'true' }}
+          env.CLOUDFLARE_ENABLED == 'true'
+          && steps.domain.outputs.RECORDS_JSON != ''
         uses: ./.itineris-actions/.github/actions/cloudflare-add-records
         with:
           ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID_DEV }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           RECORDS_JSON: ${{ steps.domain.outputs.RECORDS_JSON }}
           ADDITIONAL_RECORDS_JSON: ${{ steps.records.outputs.RECORDS_JSON }}
+
+      - name: Warn that Cloudflare DNS was skipped
+        if: >-
+          env.CLOUDFLARE_ENABLED != 'true'
+          && steps.domain.outputs.PRIMARY_DOMAIN != ''
+        env:
+          PRIMARY_DOMAIN: ${{ steps.domain.outputs.PRIMARY_DOMAIN }}
+        # yamllint disable rule:line-length
+        run: |
+          set -euo pipefail
+          echo "::warning::CLOUDFLARE_API_TOKEN or CLOUDFLARE_ZONE_ID_DEV was not passed, so no DNS record was written for $PRIMARY_DOMAIN. Point it manually."
+        # yamllint enable rule:line-length
 
       - name: Set primary domain and search-replace URLs
         if: ${{ steps.domain.outputs.DOMAIN_ID != '' }}
@@ -443,6 +459,7 @@ jobs:
           ENVIRONMENT_ID: ${{ steps.environment.outputs.ENVIRONMENT_ID }}
           PRIMARY_DOMAIN: ${{ steps.domain.outputs.PRIMARY_DOMAIN }}
           DOMAIN_ID: ${{ steps.domain.outputs.DOMAIN_ID }}
+          DNS_RECORDS_APPLIED: ${{ steps.dns.outputs.RECORDS_APPLIED }}
           SSH_USER: ${{ steps.ssh.outputs.SSH_USER }}
           SSH_HOST: ${{ steps.ssh.outputs.SSH_HOST }}
           SSH_PORT: ${{ steps.ssh.outputs.SSH_PORT }}

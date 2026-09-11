@@ -2,10 +2,9 @@
 set -euo pipefail
 
 DOMAIN_ID="${INPUT_DOMAIN_ID:-}"
-PRIMARY_DOMAIN="${INPUT_PRIMARY_DOMAIN:-}"
 KINSTA_API_URL="${INPUT_KINSTA_API_URL:-}"
 KINSTA_API_KEY="${INPUT_KINSTA_API_KEY:-}"
-MAX_ATTEMPTS="${INPUT_MAX_ATTEMPTS:-8}"
+MAX_ATTEMPTS="${INPUT_MAX_ATTEMPTS:-4}"
 SLEEP_SECONDS="${INPUT_SLEEP_SECONDS:-15}"
 
 if [[ -z "$DOMAIN_ID" || -z "$KINSTA_API_URL" || -z "$KINSTA_API_KEY" ]]; then
@@ -33,6 +32,13 @@ records_json() {
   ' "$RECORDS_FILE"
 }
 
+fall_back_to_constructed_record() {
+  echo "$1"
+  echo "Using the constructed pointing record alone."
+  echo "RECORDS_JSON=[]" >> "$GITHUB_OUTPUT"
+  exit 0
+}
+
 fetch_records() {
   local STATUS_CODE
 
@@ -40,38 +46,32 @@ fetch_records() {
     --header "$KINSTA_AUTH_HEADER" \
     "$KINSTA_API_URL/sites/environments/domains/$DOMAIN_ID/verification-records")" || true
 
-  if [[ "$STATUS_CODE" == "401" || "$STATUS_CODE" == "403" || "$STATUS_CODE" == "404" ]]; then
+  if [[ "$STATUS_CODE" == "401" || "$STATUS_CODE" == "403" ]]; then
     cat "$RECORDS_FILE" >&2 || true
     echo "Kinsta DNS record lookup failed with HTTP $STATUS_CODE" >&2
     exit 3
   fi
 
+  # A domain attached with setup_type "quick" has nothing to verify, so Kinsta
+  # answers 404. That is an expected state, not a provisioning failure.
+  if [[ "$STATUS_CODE" == "404" ]]; then
+    fall_back_to_constructed_record "Kinsta holds no verification records for this domain (HTTP 404)."
+  fi
+
   [[ "$STATUS_CODE" == "200" ]]
 }
 
-if fetch_records; then
-  echo "Kinsta reports: $(jq -c '.' "$RECORDS_FILE")"
-fi
-
-if [[ -n "$PRIMARY_DOMAIN" ]] && getent hosts "$PRIMARY_DOMAIN" >/dev/null 2>&1; then
-  echo "$PRIMARY_DOMAIN already resolves, so its DNS record is in place."
-  {
-    echo "RECORDS_JSON=[]"
-    echo "DNS_READY=true"
-  } >> "$GITHUB_OUTPUT"
-  exit 0
-fi
-
-for ATTEMPT in $(seq 1 "$MAX_ATTEMPTS"); do
+for ((ATTEMPT = 1; ATTEMPT <= MAX_ATTEMPTS; ATTEMPT++)); do
   if fetch_records; then
-    POINTING_COUNT="$(jq -r '(.site_domain.pointing_records // []) | length' "$RECORDS_FILE")"
+    RECORD_COUNT="$(jq -r '
+      ((.site_domain.verification_records // [])
+        + (.site_domain.pointing_records // [])) | length
+    ' "$RECORDS_FILE")"
 
-    if [[ "$POINTING_COUNT" -gt 0 ]]; then
-      {
-        echo "RECORDS_JSON=$(records_json)"
-        echo "DNS_READY=false"
-      } >> "$GITHUB_OUTPUT"
-      echo "Collected $POINTING_COUNT pointing record(s) from Kinsta."
+    if [[ "$RECORD_COUNT" -gt 0 ]]; then
+      echo "Kinsta reports: $(jq -c '.' "$RECORDS_FILE")"
+      echo "RECORDS_JSON=$(records_json)" >> "$GITHUB_OUTPUT"
+      echo "Collected $RECORD_COUNT record(s) from Kinsta."
       exit 0
     fi
   fi
@@ -82,10 +82,4 @@ for ATTEMPT in $(seq 1 "$MAX_ATTEMPTS"); do
   fi
 done
 
-echo "::warning::Kinsta returned no DNS records and ${PRIMARY_DOMAIN:-the hostname} does not resolve."
-echo "Falling back to the constructed pointing record."
-{
-  echo "RECORDS_JSON=[]"
-  echo "DNS_READY=false"
-} >> "$GITHUB_OUTPUT"
-exit 0
+fall_back_to_constructed_record "Kinsta returned no DNS records after $MAX_ATTEMPTS attempts."

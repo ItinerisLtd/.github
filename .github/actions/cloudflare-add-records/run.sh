@@ -32,21 +32,6 @@ if ! jq -e 'type == "array"' >/dev/null 2>&1 <<<"$ADDITIONAL_RECORDS_JSON"; then
   exit 2
 fi
 
-RECORDS_JSON="$(jq -c -n --argjson a "$RECORDS_JSON" --argjson b "$ADDITIONAL_RECORDS_JSON" '
-  ($a + ($b | map(select(. as $r | ($a | any(.name == $r.name)) | not))))
-  | unique_by([.name, .type, (.value // .content), (.proxied // false)])
-')"
-
-# A CNAME cannot share a name with any other record, so a Kinsta record at the
-# same name as the constructed pointing record is unusable rather than merely
-# redundant.
-DROPPED="$(jq -n --argjson a "$RECORDS_JSON" --argjson b "$ADDITIONAL_RECORDS_JSON" \
-  '[$b[] | select(. as $r | ($a | any(.name == $r.name and .type == $r.type)) | not) | "\(.type) \(.name)"] | join(", ")')"
-
-if [[ -n "$DROPPED" && "$DROPPED" != "null" ]]; then
-  echo "::warning::Skipped, because the pointing CNAME already occupies that name: $DROPPED"
-fi
-
 AUTH_HEADER="Authorization: Bearer ${CLOUDFLARE_TOKEN}"
 ZONE_API="https://api.cloudflare.com/client/v4/zones/$ZONE_ID"
 RESPONSE_FILE="${RUNNER_TEMP:?RUNNER_TEMP is not set}/cloudflare-response.json"
@@ -84,28 +69,52 @@ cf_api() {
 }
 
 ZONE_RESP="$(cf_api "zone lookup" GET "$ZONE_API")"
-ZONE_NAME="$(jq -r '.result.name // empty' <<<"$ZONE_RESP")"
+ZONE_NAME="$(jq -r '.result.name // empty | ascii_downcase' <<<"$ZONE_RESP")"
 
 if [[ -z "$ZONE_NAME" ]]; then
   echo "Unable to resolve the zone name for the given zone id" >&2
   exit 3
 fi
 
-fqdn() {
-  local NAME="${1%.}"
+# Names are canonicalised to absolute, lowercase form before anything compares
+# them. Kinsta may return the same host as a bare label, as "@", or with a
+# trailing dot, and two spellings of one host must not both survive the merge:
+# they would collide at write time instead.
+# shellcheck disable=SC2016
+CANON='
+  def canon($zone):
+    {
+      name: (
+        ((.name // "") | ascii_downcase | sub("\\.$"; "")) as $n
+        | if $n == "@" or $n == "" then $zone
+          elif $n == $zone or ($n | endswith("." + $zone)) then $n
+          else $n + "." + $zone
+          end
+      ),
+      type: ((.type // "") | ascii_upcase),
+      content: (.value // .content // ""),
+      proxied: (.proxied == true)
+    };
+  map(canon($zone))
+'
 
-  if [[ "$NAME" == "@" || -z "$NAME" ]]; then
-    printf '%s' "$ZONE_NAME"
-    return 0
-  fi
+RECORDS_JSON="$(jq -c --arg zone "$ZONE_NAME" "$CANON" <<<"$RECORDS_JSON")"
+ADDITIONAL_RECORDS_JSON="$(jq -c --arg zone "$ZONE_NAME" "$CANON" <<<"$ADDITIONAL_RECORDS_JSON")"
 
-  if [[ "$NAME" == "$ZONE_NAME" || "$NAME" == *".$ZONE_NAME" ]]; then
-    printf '%s' "$NAME"
-    return 0
-  fi
+MERGED_JSON="$(jq -c -n --argjson a "$RECORDS_JSON" --argjson b "$ADDITIONAL_RECORDS_JSON" '
+  ($a + ($b | map(select(. as $r | ($a | any(.name == $r.name)) | not))))
+  | unique_by([.name, .type, .content, .proxied])
+')"
 
-  printf '%s.%s' "$NAME" "$ZONE_NAME"
-}
+# A CNAME cannot share a name with any other record, so a Kinsta record at the
+# same name as the constructed pointing record is unusable rather than merely
+# redundant.
+DROPPED="$(jq -rn --argjson a "$MERGED_JSON" --argjson b "$ADDITIONAL_RECORDS_JSON" \
+  '[$b[] | select(. as $r | ($a | any(.name == $r.name and .type == $r.type)) | not) | "\(.type) \(.name)"] | unique | join(", ")')"
+
+if [[ -n "$DROPPED" ]]; then
+  echo "::warning::Skipped, because the pointing CNAME already occupies that name: $DROPPED"
+fi
 
 record_payload() {
   jq -n \
@@ -118,27 +127,25 @@ record_payload() {
 
 APPLIED=0
 while IFS= read -r ROW; do
-  RECORD_NAME="$(jq -r '.name // empty' <<<"$ROW")"
-  RECORD_TYPE="$(jq -r '.type // empty' <<<"$ROW")"
-  RECORD_CONTENT="$(jq -r '.value // .content // empty' <<<"$ROW")"
-  PROXIED="$(jq -r 'if .proxied == true then "true" else "false" end' <<<"$ROW")"
+  RECORD_NAME="$(jq -r '.name' <<<"$ROW")"
+  RECORD_TYPE="$(jq -r '.type' <<<"$ROW")"
+  RECORD_CONTENT="$(jq -r '.content' <<<"$ROW")"
+  PROXIED="$(jq -r 'if .proxied then "true" else "false" end' <<<"$ROW")"
 
   if [[ -z "$RECORD_NAME" || -z "$RECORD_TYPE" || -z "$RECORD_CONTENT" ]]; then
     echo "Skipping malformed record: $ROW" >&2
     continue
   fi
 
-  RECORD_NAME="$(fqdn "$RECORD_NAME")"
-  RECORD_TYPE="$(tr '[:lower:]' '[:upper:]' <<<"$RECORD_TYPE")"
   QUERY_NAME="$(jq -rn --arg v "$RECORD_NAME" '$v | @uri')"
 
   # Queried without a type filter, so a record of a conflicting type at the same
   # name is seen rather than silently missed until the write fails.
   QUERY_RESP="$(cf_api "lookup of $RECORD_NAME" GET "$ZONE_API/dns_records?name=$QUERY_NAME&per_page=100")"
 
-  SAME_TYPE="$(jq -c --arg type "$RECORD_TYPE" '[.result[] | select(.type == $type)]' <<<"$QUERY_RESP")"
+  SAME_TYPE="$(jq -c --arg type "$RECORD_TYPE" '[.result[] | select((.type | ascii_upcase) == $type)]' <<<"$QUERY_RESP")"
   CONFLICTING="$(jq -r --arg type "$RECORD_TYPE" \
-    '[.result[] | select(.type != $type) | select($type == "CNAME" or .type == "CNAME") | "\(.type) -> \(.content)"] | join(", ")' \
+    '[.result[] | select((.type | ascii_upcase) != $type) | select($type == "CNAME" or (.type | ascii_upcase) == "CNAME") | "\(.type) -> \(.content)"] | join(", ")' \
     <<<"$QUERY_RESP")"
 
   EXACT_COUNT="$(jq -r --arg content "$RECORD_CONTENT" --argjson proxied "$PROXIED" \
@@ -178,6 +185,6 @@ while IFS= read -r ROW; do
   fi
 
   APPLIED=$((APPLIED + 1))
-done < <(jq -c '.[]' <<<"$RECORDS_JSON")
+done < <(jq -c '.[]' <<<"$MERGED_JSON")
 
 echo "RECORDS_APPLIED=$APPLIED" >> "$GITHUB_OUTPUT"

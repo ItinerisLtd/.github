@@ -39,12 +39,16 @@ fall_back_to_constructed_record() {
   exit 0
 }
 
+LAST_STATUS=''
+
 fetch_records() {
   local STATUS_CODE
 
   STATUS_CODE="$(curl --silent --show-error --write-out '%{http_code}' --output "$RECORDS_FILE" \
     --header "$KINSTA_AUTH_HEADER" \
     "$KINSTA_API_URL/sites/environments/domains/$DOMAIN_ID/verification-records")" || true
+
+  LAST_STATUS="$STATUS_CODE"
 
   if [[ "$STATUS_CODE" == "401" || "$STATUS_CODE" == "403" ]]; then
     cat "$RECORDS_FILE" >&2 || true
@@ -61,8 +65,11 @@ fetch_records() {
   [[ "$STATUS_CODE" == "200" ]]
 }
 
+SAW_SUCCESS=false
+
 for ((ATTEMPT = 1; ATTEMPT <= MAX_ATTEMPTS; ATTEMPT++)); do
   if fetch_records; then
+    SAW_SUCCESS=true
     RECORD_COUNT="$(jq -r '
       ((.site_domain.verification_records // [])
         + (.site_domain.pointing_records // [])) | length
@@ -82,4 +89,11 @@ for ((ATTEMPT = 1; ATTEMPT <= MAX_ATTEMPTS; ATTEMPT++)); do
   fi
 done
 
-fall_back_to_constructed_record "Kinsta returned no DNS records after $MAX_ATTEMPTS attempts."
+if [[ "$SAW_SUCCESS" != "true" ]]; then
+  echo "Kinsta DNS record lookup never succeeded in $MAX_ATTEMPTS attempts." >&2
+  echo "Last response was HTTP ${LAST_STATUS:-000}:" >&2
+  cat "$RECORDS_FILE" >&2 || true
+  exit 3
+fi
+
+fall_back_to_constructed_record "Kinsta reported no DNS records after $MAX_ATTEMPTS attempts."

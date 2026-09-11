@@ -45,6 +45,7 @@ fetch_records() {
   local STATUS_CODE
 
   STATUS_CODE="$(curl --silent --show-error --write-out '%{http_code}' --output "$RECORDS_FILE" \
+    --max-time 30 \
     --header "$KINSTA_AUTH_HEADER" \
     "$KINSTA_API_URL/sites/environments/domains/$DOMAIN_ID/verification-records")" || true
 

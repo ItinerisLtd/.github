@@ -126,6 +126,7 @@ record_payload() {
 }
 
 APPLIED=0
+MALFORMED=0
 while IFS= read -r ROW; do
   RECORD_NAME="$(jq -r '.name' <<<"$ROW")"
   RECORD_TYPE="$(jq -r '.type' <<<"$ROW")"
@@ -133,7 +134,8 @@ while IFS= read -r ROW; do
   PROXIED="$(jq -r 'if .proxied then "true" else "false" end' <<<"$ROW")"
 
   if [[ -z "$RECORD_NAME" || -z "$RECORD_TYPE" || -z "$RECORD_CONTENT" ]]; then
-    echo "Skipping malformed record: $ROW" >&2
+    echo "Malformed record, missing a name, type or content: $ROW" >&2
+    MALFORMED=$((MALFORMED + 1))
     continue
   fi
 
@@ -164,9 +166,14 @@ while IFS= read -r ROW; do
   PAYLOAD="$(record_payload "$RECORD_TYPE" "$RECORD_NAME" "$RECORD_CONTENT" "$PROXIED")"
   RECORD_ID=''
 
-  # TXT, MX, SRV and CAA legitimately hold several values at one name, so an
-  # existing record is added to rather than overwritten.
-  if [[ "$RECORD_TYPE" != "TXT" && "$RECORD_TYPE" != "MX" && "$RECORD_TYPE" != "SRV" && "$RECORD_TYPE" != "CAA" ]]; then
+  DESIRED_COUNT="$(jq -r --arg name "$RECORD_NAME" --arg type "$RECORD_TYPE" \
+    '[.[] | select(.name == $name and .type == $type)] | length' <<<"$MERGED_JSON")"
+
+  # An existing record is rewritten only when exactly one is wanted at this name
+  # and type. TXT, MX, SRV and CAA always hold several values, and so can A and
+  # AAAA, and rewriting one of a set would silently discard its siblings.
+  if [[ "$DESIRED_COUNT" -eq 1 ]] \
+    && [[ "$RECORD_TYPE" != "TXT" && "$RECORD_TYPE" != "MX" && "$RECORD_TYPE" != "SRV" && "$RECORD_TYPE" != "CAA" ]]; then
     RECORD_ID="$(jq -r '.[0].id // empty' <<<"$SAME_TYPE")"
   fi
 
@@ -188,3 +195,8 @@ while IFS= read -r ROW; do
 done < <(jq -c '.[]' <<<"$MERGED_JSON")
 
 echo "RECORDS_APPLIED=$APPLIED" >> "$GITHUB_OUTPUT"
+
+if [[ "$MALFORMED" -gt 0 ]]; then
+  echo "$MALFORMED record(s) could not be written because they were malformed." >&2
+  exit 4
+fi

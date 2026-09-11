@@ -17,6 +17,8 @@ inputs:
   KINSTA_API_KEY:
     required: true
 outputs:
+  RECORDS_JSON:
+    value: ${{ steps.run.outputs.RECORDS_JSON }}
   PRIMARY_DOMAIN:
     value: ${{ steps.run.outputs.PRIMARY_DOMAIN }}
   DOMAIN_ID:

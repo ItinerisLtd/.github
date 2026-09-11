@@ -128,6 +128,11 @@ fi
 
 POINTING_TARGET="$PROJECT_NAME.hosting.kinsta.cloud"
 
+RECORDS_JSON="$(jq -n -c \
+  --arg name "$PRIMARY_DOMAIN" \
+  --arg value "$POINTING_TARGET" \
+  '[{name: $name, type: "CNAME", value: $value, proxied: true}]')"
+
 echo "Pointing record: $PRIMARY_DOMAIN CNAME $POINTING_TARGET"
 
 if ! wait_for_environment_unblocked "$KINSTA_API_URL" "$KINSTA_TOKEN" "$SITE_ID" \
@@ -138,4 +143,5 @@ fi
 {
   echo "PRIMARY_DOMAIN=$PRIMARY_DOMAIN"
   echo "DOMAIN_ID=$DOMAIN_ID"
+  echo "RECORDS_JSON=$RECORDS_JSON"
 } >> "$GITHUB_OUTPUT"

@@ -111,7 +111,9 @@ MERGED_JSON="$(jq -c -n --argjson a "$RECORDS_JSON" --argjson b "$ADDITIONAL_REC
 # same name as the constructed pointing record is unusable rather than merely
 # redundant.
 DROPPED="$(jq -rn --argjson a "$MERGED_JSON" --argjson b "$ADDITIONAL_RECORDS_JSON" \
-  '[$b[] | select(. as $r | ($a | any(.name == $r.name and .type == $r.type)) | not) | "\(.type) \(.name)"] | unique | join(", ")')"
+  '[$b[] | select(. as $r | ($a | any(.name == $r.name and .type == $r.type
+      and .content == $r.content and .proxied == $r.proxied)) | not)
+    | "\(.type) \(.name) -> \(.content)"] | unique | join(", ")')"
 
 if [[ -n "$DROPPED" ]]; then
   echo "::warning::Skipped, because the pointing CNAME already occupies that name: $DROPPED"

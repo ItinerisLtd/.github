@@ -86,7 +86,8 @@ CANON='
     {
       name: (
         ((.name // "") | ascii_downcase | sub("\\.$"; "")) as $n
-        | if $n == "@" or $n == "" then $zone
+        | if $n == "@" then $zone
+          elif $n == "" then ""
           elif $n == $zone or ($n | endswith("." + $zone)) then $n
           else $n + "." + $zone
           end
@@ -169,10 +170,11 @@ while IFS= read -r ROW; do
   DESIRED_COUNT="$(jq -r --arg name "$RECORD_NAME" --arg type "$RECORD_TYPE" \
     '[.[] | select(.name == $name and .type == $type)] | length' <<<"$MERGED_JSON")"
 
-  # An existing record is rewritten only when exactly one is wanted at this name
-  # and type. TXT, MX, SRV and CAA always hold several values, and so can A and
-  # AAAA, and rewriting one of a set would silently discard its siblings.
-  if [[ "$DESIRED_COUNT" -eq 1 ]] \
+  # An existing record is rewritten only when exactly one is wanted and exactly
+  # one is already there. TXT, MX, SRV and CAA always hold several values, and
+  # so can A and AAAA: picking one of a set to rewrite would leave its siblings
+  # in place and change an address nobody asked about.
+  if [[ "$DESIRED_COUNT" -eq 1 && "$CANDIDATE_COUNT" -eq 1 ]] \
     && [[ "$RECORD_TYPE" != "TXT" && "$RECORD_TYPE" != "MX" && "$RECORD_TYPE" != "SRV" && "$RECORD_TYPE" != "CAA" ]]; then
     RECORD_ID="$(jq -r '.[0].id // empty' <<<"$SAME_TYPE")"
   fi

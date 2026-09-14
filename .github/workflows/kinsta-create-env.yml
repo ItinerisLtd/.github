@@ -154,6 +154,30 @@ jobs:
               ;;
           esac
 
+      - name: Validate TRELLIS_REPOSITORY format
+        env:
+          TRELLIS_REPOSITORY: ${{ inputs.TRELLIS_REPOSITORY }}
+        # yamllint disable rule:line-length
+        run: |
+          set -euo pipefail
+          if ! [[ "$TRELLIS_REPOSITORY" =~ ^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$ ]]; then
+            echo "TRELLIS_REPOSITORY '$TRELLIS_REPOSITORY' is not in 'owner/repo' format." >&2
+            exit 1
+          fi
+        # yamllint enable rule:line-length
+
+      - name: Validate ENVIRONMENT for filesystem use
+        env:
+          ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+        # yamllint disable rule:line-length
+        run: |
+          set -euo pipefail
+          if ! [[ "$ENVIRONMENT" =~ ^[a-z0-9_-]+$ ]]; then
+            echo "ENVIRONMENT must be lowercase, containing only letters, numbers, hyphens, and underscores, since it is used as a case-sensitive Trellis filesystem path (group_vars/<environment> and hosts/<environment>) even though GitHub Actions' == is case-insensitive." >&2
+            exit 1
+          fi
+        # yamllint enable rule:line-length
+
       - name: Checkout shared actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -171,34 +195,6 @@ jobs:
           SOURCE_ENVIRONMENT: ${{ inputs.SOURCE_ENVIRONMENT }}
           KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
           KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
-
-      - name: Validate TRELLIS_REPOSITORY format
-        env:
-          TRELLIS_REPOSITORY: ${{ inputs.TRELLIS_REPOSITORY }}
-        # yamllint disable rule:line-length
-        run: |
-          set -euo pipefail
-          if ! [[ "$TRELLIS_REPOSITORY" =~ ^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$ ]]; then
-            echo "TRELLIS_REPOSITORY '$TRELLIS_REPOSITORY' is not in 'owner/repo' format." >&2
-            exit 1
-          fi
-        # yamllint enable rule:line-length
-
-      - name: Validate ENVIRONMENT for filesystem use
-        if: >-
-          inputs.CONFIGURE_EXISTING
-          || steps.environment.outputs.CREATED == 'true'
-          || env.SYNC_ENABLED == 'true'
-        env:
-          ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
-        # yamllint disable rule:line-length
-        run: |
-          set -euo pipefail
-          if ! [[ "$ENVIRONMENT" =~ ^[a-z0-9_-]+$ ]]; then
-            echo "ENVIRONMENT must be lowercase, containing only letters, numbers, hyphens, and underscores, since it is used as a case-sensitive Trellis filesystem path (group_vars/<environment> and hosts/<environment>) even though GitHub Actions' == is case-insensitive." >&2
-            exit 1
-          fi
-        # yamllint enable rule:line-length
 
       - name: Checkout Trellis
         if: >-

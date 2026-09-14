@@ -186,6 +186,22 @@ jobs:
           path: .itineris-actions
           persist-credentials: false
 
+      - name: Checkout Trellis
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ inputs.TRELLIS_REPOSITORY }}
+          path: trellis
+          token: ${{ secrets.REPO_PAT }}
+
+      - name: Resolve canonical domain from Trellis
+        id: resolve-domain
+        # yamllint disable-line rule:line-length
+        uses: ./.itineris-actions/.github/actions/trellis-resolve-canonical-domain
+        with:
+          # yamllint disable-line rule:line-length
+          WORDPRESS_SITES_FILE: trellis/group_vars/${{ inputs.ENVIRONMENT }}/wordpress_sites.yml
+          BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
+
       - name: Find or create environment
         id: environment
         uses: ./.itineris-actions/.github/actions/kinsta-find-or-create-env
@@ -195,29 +211,6 @@ jobs:
           SOURCE_ENVIRONMENT: ${{ inputs.SOURCE_ENVIRONMENT }}
           KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
           KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
-
-      - name: Checkout Trellis
-        if: >-
-          inputs.CONFIGURE_EXISTING
-          || steps.environment.outputs.CREATED == 'true'
-          || env.SYNC_ENABLED == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: ${{ inputs.TRELLIS_REPOSITORY }}
-          path: trellis
-          token: ${{ secrets.REPO_PAT }}
-
-      - name: Resolve canonical domain from Trellis
-        id: resolve-domain
-        if: >-
-          ${{ inputs.CONFIGURE_EXISTING
-          || steps.environment.outputs.CREATED == 'true' }}
-        # yamllint disable-line rule:line-length
-        uses: ./.itineris-actions/.github/actions/trellis-resolve-canonical-domain
-        with:
-          # yamllint disable-line rule:line-length
-          WORDPRESS_SITES_FILE: trellis/group_vars/${{ inputs.ENVIRONMENT }}/wordpress_sites.yml
-          BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
 
       - name: Attach domain
         id: domain

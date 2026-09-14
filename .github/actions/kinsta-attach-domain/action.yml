@@ -12,8 +12,8 @@ inputs:
     required: true
   BASE_DOMAIN:
     description: >-
-      Zone PRIMARY_DOMAIN must belong to, and the suffix stripped off it to
-      build the Kinsta pointing-target label
+      Zone PRIMARY_DOMAIN must belong to (defence in depth against
+      attaching an out-of-zone hostname)
     required: true
   KINSTA_API_URL:
     required: true

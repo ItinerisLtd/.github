@@ -21,13 +21,6 @@ if [[ "$PRIMARY_DOMAIN" != *".$BASE_DOMAIN" ]]; then
   exit 3
 fi
 
-PROJECT_NAME="${PRIMARY_DOMAIN%".$BASE_DOMAIN"}"
-
-if ! [[ "$PROJECT_NAME" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
-  echo "Could not derive a short project label from PRIMARY_DOMAIN '$PRIMARY_DOMAIN' for the pointing target." >&2
-  exit 3
-fi
-
 echo "Using primary domain: $PRIMARY_DOMAIN"
 
 KINSTA_AUTH_HEADER="Authorization: Bearer ${KINSTA_TOKEN}"
@@ -124,7 +117,19 @@ if [[ -z "$DOMAIN_ID" ]]; then
   exit 7
 fi
 
-POINTING_TARGET="$PROJECT_NAME.hosting.kinsta.cloud"
+POINTING_TARGET="$(jq -r '
+  [ .environment.site_domains[]?
+    | select(.name | endswith(".kinsta.cloud"))
+    | select(.name | startswith("*.") | not)
+    | .name
+  ] | .[0] // empty
+' "$DOMAINS_FILE")"
+
+if [[ -z "$POINTING_TARGET" ]]; then
+  echo "Unable to find a *.kinsta.cloud temporary domain for environment $ENVIRONMENT_ID to use as the pointing target" >&2
+  jq -c '[.environment.site_domains[]? | {id, name}]' "$DOMAINS_FILE" >&2 || true
+  exit 12
+fi
 
 echo "Pointing record: $PRIMARY_DOMAIN CNAME $POINTING_TARGET"
 

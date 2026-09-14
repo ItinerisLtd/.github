@@ -6,31 +6,29 @@ source "$(dirname "${BASH_SOURCE[0]}")/../_lib/kinsta-api.sh"
 
 SITE_ID="${INPUT_SITE_ID:-}"
 ENVIRONMENT_ID="${INPUT_ENVIRONMENT_ID:-}"
-REPOSITORY="${INPUT_REPOSITORY:-}"
+PRIMARY_DOMAIN="${INPUT_PRIMARY_DOMAIN:-}"
 BASE_DOMAIN="${INPUT_BASE_DOMAIN:-}"
 KINSTA_API_URL="${INPUT_KINSTA_API_URL:-}"
 KINSTA_TOKEN="${INPUT_KINSTA_API_KEY:-}"
 
-if [[ -z "$SITE_ID" || -z "$ENVIRONMENT_ID" || -z "$REPOSITORY" || -z "$BASE_DOMAIN" || -z "$KINSTA_API_URL" || -z "$KINSTA_TOKEN" ]]; then
+if [[ -z "$SITE_ID" || -z "$ENVIRONMENT_ID" || -z "$PRIMARY_DOMAIN" || -z "$BASE_DOMAIN" || -z "$KINSTA_API_URL" || -z "$KINSTA_TOKEN" ]]; then
   echo "Missing required input(s) for domain attachment" >&2
   exit 2
 fi
 
-PROJECT_NAME="${REPOSITORY##*/}"
-PROJECT_NAME="${PROJECT_NAME%-bedrock}"
-PROJECT_NAME="${PROJECT_NAME%-trellis}"
-PROJECT_NAME="${PROJECT_NAME%-radicle}"
-PROJECT_NAME="${PROJECT_NAME#www.}"
-PROJECT_NAME="${PROJECT_NAME%%.*}"
-PROJECT_NAME="$(tr '[:upper:]' '[:lower:]' <<<"$PROJECT_NAME")"
-
-if ! [[ "$PROJECT_NAME" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
-  echo "Could not derive a valid hostname label from repository '$REPOSITORY'" >&2
+if [[ "$PRIMARY_DOMAIN" != *".$BASE_DOMAIN" ]]; then
+  echo "PRIMARY_DOMAIN '$PRIMARY_DOMAIN' does not end with '.$BASE_DOMAIN'" >&2
   exit 3
 fi
 
-PRIMARY_DOMAIN="$PROJECT_NAME.$BASE_DOMAIN"
-echo "Derived primary domain: $PRIMARY_DOMAIN"
+PROJECT_NAME="${PRIMARY_DOMAIN%".$BASE_DOMAIN"}"
+
+if ! [[ "$PROJECT_NAME" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+  echo "Could not derive a short project label from PRIMARY_DOMAIN '$PRIMARY_DOMAIN' for the pointing target." >&2
+  exit 3
+fi
+
+echo "Using primary domain: $PRIMARY_DOMAIN"
 
 KINSTA_AUTH_HEADER="Authorization: Bearer ${KINSTA_TOKEN}"
 SCRATCH_DIR="${RUNNER_TEMP:?RUNNER_TEMP is not set}"

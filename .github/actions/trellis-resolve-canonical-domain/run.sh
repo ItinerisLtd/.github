@@ -14,6 +14,16 @@ if [[ ! -f "$WORDPRESS_SITES_FILE" ]]; then
   exit 1
 fi
 
+if ! command -v yq >/dev/null 2>&1; then
+  echo "yq is not installed on this runner. This action requires mikefarah/yq (https://github.com/mikefarah/yq), which ships preinstalled on GitHub-hosted ubuntu-latest runners." >&2
+  exit 2
+fi
+
+if ! yq --version 2>&1 | grep -q "mikefarah/yq"; then
+  echo "The 'yq' on PATH is not mikefarah/yq (https://github.com/mikefarah/yq). This action requires that implementation's 'yq eval' syntax, not the Python kislyuk/yq tool of the same name." >&2
+  exit 2
+fi
+
 SITES_COUNT="$(yq eval '.wordpress_sites | length' "$WORDPRESS_SITES_FILE")"
 
 if [[ "$SITES_COUNT" == "0" ]]; then

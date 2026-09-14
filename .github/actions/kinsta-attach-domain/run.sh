@@ -117,7 +117,7 @@ if [[ -z "$DOMAIN_ID" ]]; then
   exit 7
 fi
 
-POINTING_TARGET="$(jq -r '
+TEMP_DOMAIN="$(jq -r '
   [ .environment.site_domains[]?
     | select(.name | endswith(".kinsta.cloud"))
     | select(.name | startswith("*.") | not)
@@ -125,11 +125,16 @@ POINTING_TARGET="$(jq -r '
   ] | .[0] // empty
 ' "$DOMAINS_FILE")"
 
-if [[ -z "$POINTING_TARGET" ]]; then
+if [[ -z "$TEMP_DOMAIN" ]]; then
   echo "Unable to find a *.kinsta.cloud temporary domain for environment $ENVIRONMENT_ID to use as the pointing target" >&2
   jq -c '[.environment.site_domains[]? | {id, name}]' "$DOMAINS_FILE" >&2 || true
   exit 12
 fi
+
+# Kinsta's environment hostname (e.g. "foo.kinsta.cloud", found above) is
+# distinct from its DNS pointing target: custom domains are CNAMEd to
+# "foo.hosting.kinsta.cloud" instead.
+POINTING_TARGET="${TEMP_DOMAIN%.kinsta.cloud}.hosting.kinsta.cloud"
 
 echo "Pointing record: $PRIMARY_DOMAIN CNAME $POINTING_TARGET"
 

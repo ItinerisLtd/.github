@@ -40,9 +40,8 @@ on:
         description: >-
           owner/repo of the Trellis repository holding this environment's
           inventory and its committed wordpress_sites.yml, which supplies
-          the environment's canonical domain (see the Domain Convention
-          section of the design doc). The SSH details sync only runs when
-          ENVIRONMENT is exactly 'staging'.
+          the environment's canonical domain. The SSH details sync only
+          runs when ENVIRONMENT is exactly 'staging'.
         type: string
         required: true
       BEDROCK_ALIAS_FILE:

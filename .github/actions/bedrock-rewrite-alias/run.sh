@@ -59,15 +59,21 @@ fi
 # even though the header is present.
 sed -i 's/\r$//' "$ALIAS_FILE"
 
-HEADER_COUNT="$(grep -cxF "@$TRELLIS_ENVIRONMENT:" "$ALIAS_FILE" || true)"
+# Trellis-generated alias files quote every key ("@staging":), but a
+# hand-edited file may leave keys bare (@staging:). Accept both forms for
+# the target header and for detecting where its block ends (the next
+# top-level key, quoted or not).
+HEADER_REGEX="^[\"']?@${TRELLIS_ENVIRONMENT}[\"']?:\$"
+
+HEADER_COUNT="$(grep -cE "$HEADER_REGEX" "$ALIAS_FILE" || true)"
 if [[ "$HEADER_COUNT" != "1" ]]; then
-  echo "Expected exactly one '@$TRELLIS_ENVIRONMENT:' header in $ALIAS_FILE, found $HEADER_COUNT." >&2
+  echo "Expected exactly one '@$TRELLIS_ENVIRONMENT:' header (bare or quoted) in $ALIAS_FILE, found $HEADER_COUNT." >&2
   exit 1
 fi
 
-SSH_LINE_COUNT="$(awk -v env="@$TRELLIS_ENVIRONMENT:" '
-  $0 == env { in_block=1; next }
-  in_block && /^@[^[:space:]]/ { in_block=0 }
+SSH_LINE_COUNT="$(awk -v header="$HEADER_REGEX" '
+  $0 ~ header { in_block=1; next }
+  in_block && /^["'"'"']?@[^[:space:]]/ { in_block=0 }
   in_block && /^[[:space:]]+ssh:/ { count++ }
   END { print count+0 }
 ' "$ALIAS_FILE")"
@@ -78,9 +84,9 @@ fi
 
 NEW_SSH="$SSH_USER@$SSH_HOST:$SSH_PORT"
 
-awk -v env="@$TRELLIS_ENVIRONMENT:" -v newssh="$NEW_SSH" '
-  $0 == env { in_block=1; print; next }
-  in_block && /^@[^[:space:]]/ { in_block=0 }
+awk -v header="$HEADER_REGEX" -v newssh="$NEW_SSH" '
+  $0 ~ header { in_block=1; print; next }
+  in_block && /^["'"'"']?@[^[:space:]]/ { in_block=0 }
   in_block && match($0, /^[[:space:]]+ssh:/) {
     indent = substr($0, 1, RLENGTH - 4)
     print indent "ssh: \"" newssh "\""
@@ -93,9 +99,9 @@ mv "$ALIAS_FILE.tmp" "$ALIAS_FILE"
 # Scope the success check to the target block specifically, not the whole
 # file, otherwise a coincidentally identical ssh value already present in
 # a different environment's block would mask a failed rewrite here.
-BLOCK_CONTENT="$(awk -v env="@$TRELLIS_ENVIRONMENT:" '
-  $0 == env { in_block=1; print; next }
-  in_block && /^@[^[:space:]]/ { in_block=0 }
+BLOCK_CONTENT="$(awk -v header="$HEADER_REGEX" '
+  $0 ~ header { in_block=1; print; next }
+  in_block && /^["'"'"']?@[^[:space:]]/ { in_block=0 }
   in_block { print }
 ' "$ALIAS_FILE")"
 
@@ -105,4 +111,4 @@ if ! grep -qF "ssh: \"$NEW_SSH\"" <<<"$BLOCK_CONTENT"; then
   exit 1
 fi
 
-grep -A1 -F "@$TRELLIS_ENVIRONMENT:" "$ALIAS_FILE"
+grep -A1 -E "$HEADER_REGEX" "$ALIAS_FILE"

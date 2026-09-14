@@ -39,13 +39,11 @@ on:
       TRELLIS_REPOSITORY:
         description: >-
           owner/repo of the Trellis repository holding this environment's
-          inventory. Leave empty to skip syncing committed SSH details
-          entirely, or the sync steps are a no-op without it. The sync
-          also only runs when ENVIRONMENT is exactly 'staging', regardless
-          of this value.
+          inventory and its committed wordpress_sites.yml, which supplies
+          the environment's canonical domain. The SSH details sync only
+          runs when ENVIRONMENT is exactly 'staging'.
         type: string
-        required: false
-        default: ''
+        required: true
       BEDROCK_ALIAS_FILE:
         description: >-
           Path, relative to the calling Bedrock repo root, of the wp-cli
@@ -81,7 +79,7 @@ on:
       USER_AGENT:
         required: false
       REPO_PAT:
-        required: false
+        required: true
       TRELLIS_INVENTORY_BOT_APP_ID:
         required: false
       TRELLIS_INVENTORY_BOT_PRIVATE_KEY:
@@ -138,9 +136,7 @@ jobs:
       # if: expression across steps other than a job-level env var.
       # inputs.* is available here since it's resolved before the job
       # starts, unlike steps.* outputs.
-      SYNC_ENABLED: >-
-        ${{ inputs.TRELLIS_REPOSITORY != ''
-        && inputs.ENVIRONMENT == 'staging' }}
+      SYNC_ENABLED: ${{ inputs.ENVIRONMENT == 'staging' }}
     steps:
       - name: Reject production environments
         env:
@@ -158,6 +154,30 @@ jobs:
               ;;
           esac
 
+      - name: Validate TRELLIS_REPOSITORY format
+        env:
+          TRELLIS_REPOSITORY: ${{ inputs.TRELLIS_REPOSITORY }}
+        # yamllint disable rule:line-length
+        run: |
+          set -euo pipefail
+          if ! [[ "$TRELLIS_REPOSITORY" =~ ^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$ ]]; then
+            echo "TRELLIS_REPOSITORY '$TRELLIS_REPOSITORY' is not in 'owner/repo' format." >&2
+            exit 1
+          fi
+        # yamllint enable rule:line-length
+
+      - name: Validate ENVIRONMENT for filesystem use
+        env:
+          ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+        # yamllint disable rule:line-length
+        run: |
+          set -euo pipefail
+          if ! [[ "$ENVIRONMENT" =~ ^[a-z0-9_-]+$ ]]; then
+            echo "ENVIRONMENT must be lowercase, containing only letters, numbers, hyphens, and underscores, since it is used as a case-sensitive Trellis filesystem path (group_vars/<environment> and hosts/<environment>) even though GitHub Actions' == is case-insensitive." >&2
+            exit 1
+          fi
+        # yamllint enable rule:line-length
+
       - name: Checkout shared actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -165,6 +185,22 @@ jobs:
           ref: ${{ inputs.SHARED_ACTIONS_REF }}
           path: .itineris-actions
           persist-credentials: false
+
+      - name: Checkout Trellis
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ inputs.TRELLIS_REPOSITORY }}
+          path: trellis
+          token: ${{ secrets.REPO_PAT }}
+
+      - name: Resolve canonical domain from Trellis
+        id: resolve-domain
+        # yamllint disable-line rule:line-length
+        uses: ./.itineris-actions/.github/actions/trellis-resolve-canonical-domain
+        with:
+          # yamllint disable-line rule:line-length
+          WORDPRESS_SITES_FILE: trellis/group_vars/${{ inputs.ENVIRONMENT }}/wordpress_sites.yml
+          BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
 
       - name: Find or create environment
         id: environment
@@ -185,7 +221,7 @@ jobs:
         with:
           SITE_ID: ${{ inputs.KINSTA_SITE_ID }}
           ENVIRONMENT_ID: ${{ steps.environment.outputs.ENVIRONMENT_ID }}
-          REPOSITORY: ${{ github.repository }}
+          PRIMARY_DOMAIN: ${{ steps.resolve-domain.outputs.PRIMARY_DOMAIN }}
           BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
           KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
           KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
@@ -226,16 +262,11 @@ jobs:
           REPO_PAT: ${{ secrets.REPO_PAT }}
           SSH_USER: ${{ steps.ssh.outputs.SSH_USER }}
           BEDROCK_ALIAS_FILE: ${{ inputs.BEDROCK_ALIAS_FILE }}
-          ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
         # yamllint disable rule:line-length
         run: |
           set -euo pipefail
           if [[ -z "$APP_ID" || -z "$PRIVATE_KEY" || -z "$REPO_PAT" ]]; then
             echo "TRELLIS_INVENTORY_BOT_APP_ID, TRELLIS_INVENTORY_BOT_PRIVATE_KEY, and REPO_PAT are required to sync SSH details." >&2
-            exit 1
-          fi
-          if ! [[ "$ENVIRONMENT" =~ ^[a-z0-9_-]+$ ]]; then
-            echo "ENVIRONMENT must be lowercase, containing only letters, numbers, hyphens, and underscores, to sync SSH details (GitHub Actions' == is case-insensitive, but the filesystem paths this value feeds into are not)." >&2
             exit 1
           fi
           if [[ -z "$SSH_USER" ]]; then
@@ -266,10 +297,6 @@ jobs:
         # yamllint disable rule:line-length
         run: |
           set -euo pipefail
-          if ! [[ "$TRELLIS_REPOSITORY" =~ ^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$ ]]; then
-            echo "TRELLIS_REPOSITORY '$TRELLIS_REPOSITORY' is not in 'owner/repo' format." >&2
-            exit 1
-          fi
           TRELLIS_OWNER="${TRELLIS_REPOSITORY%%/*}"
           if [[ "${TRELLIS_OWNER,,}" != "${EXPECTED_OWNER,,}" ]]; then
             echo "TRELLIS_REPOSITORY's owner '$TRELLIS_OWNER' does not match this workflow's owner '$EXPECTED_OWNER'. The inventory bot App token is minted for a single owner, so a cross-owner Trellis repo is not supported." >&2
@@ -295,14 +322,6 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
           permission-checks: read
-
-      - name: Checkout Trellis
-        if: env.SYNC_ENABLED == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: ${{ inputs.TRELLIS_REPOSITORY }}
-          path: trellis
-          token: ${{ secrets.REPO_PAT }}
 
       - name: Snapshot original Trellis inventory
         id: trellis-snapshot

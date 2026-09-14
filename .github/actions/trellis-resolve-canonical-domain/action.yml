@@ -1,0 +1,22 @@
+---
+name: trellis-resolve-canonical-domain
+description: Resolve an environment's canonical domain from a Trellis checkout
+inputs:
+  WORDPRESS_SITES_FILE:
+    description: Path to group_vars/<environment>/wordpress_sites.yml
+    required: true
+  BASE_DOMAIN:
+    description: Zone the resolved domain must belong to
+    required: true
+outputs:
+  PRIMARY_DOMAIN:
+    value: ${{ steps.run.outputs.PRIMARY_DOMAIN }}
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      run: bash "${{ github.action_path }}/run.sh"
+      env:
+        INPUT_WORDPRESS_SITES_FILE: ${{ inputs.WORDPRESS_SITES_FILE }}
+        INPUT_BASE_DOMAIN: ${{ inputs.BASE_DOMAIN }}

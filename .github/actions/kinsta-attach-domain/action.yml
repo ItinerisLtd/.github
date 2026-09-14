@@ -6,11 +6,14 @@ inputs:
     required: true
   ENVIRONMENT_ID:
     required: true
-  REPOSITORY:
-    description: Caller repository in owner/name form
+  PRIMARY_DOMAIN:
+    description: >-
+      The already-resolved, already-validated canonical hostname to attach
     required: true
   BASE_DOMAIN:
-    description: Zone the derived project hostname is created under
+    description: >-
+      Zone PRIMARY_DOMAIN must belong to (defence in depth against
+      attaching an out-of-zone hostname)
     required: true
   KINSTA_API_URL:
     required: true
@@ -30,7 +33,7 @@ runs:
       env:
         INPUT_SITE_ID: ${{ inputs.SITE_ID }}
         INPUT_ENVIRONMENT_ID: ${{ inputs.ENVIRONMENT_ID }}
-        INPUT_REPOSITORY: ${{ inputs.REPOSITORY }}
+        INPUT_PRIMARY_DOMAIN: ${{ inputs.PRIMARY_DOMAIN }}
         INPUT_BASE_DOMAIN: ${{ inputs.BASE_DOMAIN }}
         INPUT_KINSTA_API_URL: ${{ inputs.KINSTA_API_URL }}
         INPUT_KINSTA_API_KEY: ${{ inputs.KINSTA_API_KEY }}

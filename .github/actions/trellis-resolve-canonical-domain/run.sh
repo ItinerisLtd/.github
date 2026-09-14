@@ -65,6 +65,19 @@ if ! [[ "$PRIMARY_DOMAIN" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]
   exit 1
 fi
 
+if ((${#PRIMARY_DOMAIN} > 253)); then
+  echo "Resolved domain '$PRIMARY_DOMAIN' from $WORDPRESS_SITES_FILE is longer than the 253-character DNS name limit." >&2
+  exit 1
+fi
+
+IFS='.' read -ra PRIMARY_DOMAIN_LABELS <<<"$PRIMARY_DOMAIN"
+for LABEL in "${PRIMARY_DOMAIN_LABELS[@]}"; do
+  if ((${#LABEL} > 63)); then
+    echo "Resolved domain '$PRIMARY_DOMAIN' from $WORDPRESS_SITES_FILE has label '$LABEL' longer than the 63-character DNS label limit." >&2
+    exit 1
+  fi
+done
+
 if [[ "$PRIMARY_DOMAIN" != *".$BASE_DOMAIN" ]]; then
   echo "Resolved domain '$PRIMARY_DOMAIN' from $WORDPRESS_SITES_FILE does not end with '.$BASE_DOMAIN'. Refusing to attach what looks like a real production/client hostname to a disposable Kinsta environment." >&2
   exit 1

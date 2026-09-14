@@ -196,7 +196,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! [[ "$ENVIRONMENT" =~ ^[a-z0-9_-]+$ ]]; then
-            echo "ENVIRONMENT must be lowercase, containing only letters, numbers, hyphens, and underscores, to sync SSH details (GitHub Actions' == is case-insensitive, but the filesystem paths this value feeds into are not)." >&2
+            echo "ENVIRONMENT must be lowercase, containing only letters, numbers, hyphens, and underscores, since it is used as a case-sensitive Trellis filesystem path (group_vars/<environment> and hosts/<environment>) even though GitHub Actions' == is case-insensitive." >&2
             exit 1
           fi
         # yamllint enable rule:line-length

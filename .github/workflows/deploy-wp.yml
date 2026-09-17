@@ -156,9 +156,45 @@ jobs:
         # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ env.RELEASE_ID }}/.env'
 
-      - name: Copy Wordfence WAF file
-        # yamllint disable-line rule:line-length
-        run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'if [ -f ~/deploy/shared/wordfence-waf.php ]; then cp ~/deploy/shared/wordfence-waf.php ~/deploy/releases/${{ env.RELEASE_ID }}/wordfence-waf.php; else echo "No shared wordfence-waf.php yet - skipping."; fi'
+      - name: Persist Wordfence WAF file and wflogs directory
+        # yamllint disable rule:line-length
+        run: |
+          ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} '
+            set -e
+            RELEASE_DIR=~/deploy/releases/${{ env.RELEASE_ID }}
+            SHARED_DIR=~/deploy/shared
+
+            # Copied, not symlinked: the file resolves its paths with __DIR__.
+            if [ -f "$SHARED_DIR/wordfence-waf.php" ]; then
+              cp "$SHARED_DIR/wordfence-waf.php" "$RELEASE_DIR/wordfence-waf.php"
+            else
+              echo "No shared wordfence-waf.php yet - skipping."
+            fi
+
+            # WAF state (mode, rules, blocked IPs) lives in wflogs; a missing dir resets it to learning mode.
+            # First rollout seeds shared from the live release, via a temp dir so a partial copy is never kept.
+            CURRENT_WFLOGS=~/public/wp-content/wflogs
+            if [ ! -d "$SHARED_DIR/wflogs" ]; then
+              if [ -d "$CURRENT_WFLOGS" ] && [ ! -L "$CURRENT_WFLOGS" ]; then
+                echo "Seeding shared wflogs from the current release."
+                SEED_TMP="$SHARED_DIR/wflogs.seed.$$"
+                rm -rf "$SEED_TMP"
+                if cp -a "$CURRENT_WFLOGS" "$SEED_TMP"; then
+                  mv "$SEED_TMP" "$SHARED_DIR/wflogs"
+                else
+                  rm -rf "$SEED_TMP"
+                  echo "Failed to seed shared wflogs from $CURRENT_WFLOGS"
+                  exit 1
+                fi
+              else
+                mkdir -p "$SHARED_DIR/wflogs"
+              fi
+            fi
+
+            rm -rf "$RELEASE_DIR/wp-content/wflogs"
+            ln -sfn "$SHARED_DIR/wflogs" "$RELEASE_DIR/wp-content/wflogs"
+          '
+        # yamllint enable rule:line-length
 
       - name: Check if WordPress is already installed
         id: check-wp-installed

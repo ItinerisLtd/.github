@@ -222,34 +222,24 @@ jobs:
         # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ~/deploy/releases/${{ env.RELEASE_ID }} ~/public'
 
-      - name: Check if basic auth is configured
-        id: check-basic-auth
+      - name: Test the new release with smoke test
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+          SMOKE_TEST_USER_AGENT: ${{ vars.SMOKE_TEST_USER_AGENT }}
+          BASIC_AUTH_USERNAME: ${{ secrets.BASIC_AUTH_USERNAME }}
+          BASIC_AUTH_PASSWORD: ${{ secrets.BASIC_AUTH_PASSWORD }}
         run: |
-          if [ -n "${{ secrets.BASIC_AUTH_PASSWORD }}" ]; then
-            echo "has-basic-auth=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has-basic-auth=false" >> "$GITHUB_OUTPUT"
+          CURL_AUTH=()
+          if [ -n "${BASIC_AUTH_PASSWORD}" ]; then
+            CURL_AUTH=(--user "${BASIC_AUTH_USERNAME}:${BASIC_AUTH_PASSWORD}")
           fi
-
-      - name: Test the new release with smoke test (with basic auth)
-        if: steps.check-basic-auth.outputs.has-basic-auth == 'true'
-        # yamllint disable-line rule:line-length
-        uses: jtalk/url-health-check-action@e7d5ebdc9027fbf494d2d034f3e8fc78f8b7a2b9
-        with:
-          url: ${{ vars.SITE_URL }}?nocache
-          max-attempts: 3
-          retry-delay: 10s
-          # yamllint disable-line rule:line-length
-          basic-auth: "${{ secrets.BASIC_AUTH_USERNAME }}:${{ secrets.BASIC_AUTH_PASSWORD }}"
-
-      - name: Test the new release with smoke test (without basic auth)
-        if: steps.check-basic-auth.outputs.has-basic-auth == 'false'
-        # yamllint disable-line rule:line-length
-        uses: jtalk/url-health-check-action@e7d5ebdc9027fbf494d2d034f3e8fc78f8b7a2b9
-        with:
-          url: ${{ vars.SITE_URL }}?nocache
-          max-attempts: 3
-          retry-delay: 10s
+          # Cloudflare WAF blocks the default curl user agent, so send our own.
+          curl --fail --silent --show-error --output /dev/null --max-time 30 \
+            --retry 3 --retry-delay 10 --retry-connrefused \
+            --write-out 'Smoke test: HTTP %{http_code} from %{url_effective}\n' \
+            --user-agent "${SMOKE_TEST_USER_AGENT:-ItinerisDeploy/1.0}" \
+            "${CURL_AUTH[@]}" \
+            "${SITE_URL}?nocache"
 
       - name: Rollback deployment on failure
         if: failure()

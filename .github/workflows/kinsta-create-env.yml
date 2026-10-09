@@ -183,6 +183,7 @@ jobs:
         with:
           repository: ItinerisLtd/.github
           ref: ${{ inputs.SHARED_ACTIONS_REF }}
+          token: ${{ secrets.REPO_PAT }}
           path: .itineris-actions
           persist-credentials: false
 

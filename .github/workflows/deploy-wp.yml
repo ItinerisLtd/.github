@@ -117,6 +117,7 @@ jobs:
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/releases/${{ env.RELEASE_ID }}'
 
       - name: Push files to the remote
+        # yamllint disable rule:line-length
         run: |
           set -euo pipefail
           SSH_PORT="${{ vars.SSH_PORT }}"
@@ -139,6 +140,18 @@ jobs:
           if [[ -f ./favicon.ico ]]; then
             rsync "${RSYNC_OPTS[@]}" ./favicon.ico "${SSH_DEST}:${REMOTE_BASE}"
           fi
+
+          WEBROOT_PATHS=()
+          for WEBROOT_PATH in google[0-9a-f]*.html BingSiteAuth.xml robots.txt .well-known; do
+            if [[ -e "${WEBROOT_PATH}" ]]; then
+              WEBROOT_PATHS+=("${WEBROOT_PATH}")
+            fi
+          done
+
+          if [[ "${#WEBROOT_PATHS[@]}" -gt 0 ]]; then
+            rsync "${RSYNC_OPTS[@]}" "${WEBROOT_PATHS[@]}" "${SSH_DEST}:${REMOTE_BASE}"
+          fi
+        # yamllint enable rule:line-length
 
       - name: Create the shared directory if it doesn't exist
         # yamllint disable-line rule:line-length

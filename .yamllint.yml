@@ -1,0 +1,10 @@
+---
+extends: default
+
+ignore: |
+  .git/
+
+rules:
+  line-length:
+    ignore: |
+      **/.github/workflows/

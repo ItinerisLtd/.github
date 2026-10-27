@@ -32,7 +32,6 @@ jobs:
     environment: ${{ inputs.ENVIRONMENT }}
 
     env:
-      # yamllint disable-line rule:line-length
       RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     concurrency:
@@ -56,7 +55,6 @@ jobs:
         with:
           php-version: ${{ inputs.PHP_VERSION }}
         env:
-          # yamllint disable-line rule:line-length
           COMPOSER_AUTH_JSON: '{"http-basic": {"repo.packagist.com": {"username": "itineris", "password": "${{ secrets.PRIVATE_PACKAGIST_TOKEN }}"}}}'
 
       - name: Cache Composer packages
@@ -64,7 +62,6 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: vendor
-          # yamllint disable-line rule:line-length
           key: ${{ runner.os }}-php-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-php-composer-
@@ -77,7 +74,6 @@ jobs:
           ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
 
       - name: Install Dependencies Composer [WordPress]
-        # yamllint disable-line rule:line-length
         run: composer install --no-ansi --no-dev --no-interaction --no-progress --optimize-autoloader --no-scripts --classmap-authoritative
 
       - name: Build Theme
@@ -105,19 +101,15 @@ jobs:
 
       - name: Get current release symlink target
         id: getCurrentRelease
-        # yamllint disable rule:line-length
         run: |
           CURRENT_RELEASE_LINK=$(ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} "readlink ~/public || echo ''")
           printf 'current_release_link=%s\n' "$CURRENT_RELEASE_LINK" >> "$GITHUB_OUTPUT"
           echo "Current release symlink target: $CURRENT_RELEASE_LINK"
-        # yamllint enable rule:line-length
 
       - name: Create Release Dir On Remote
-        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/releases/${{ env.RELEASE_ID }}'
 
       - name: Push files to the remote
-        # yamllint disable rule:line-length
         run: |
           set -euo pipefail
           SSH_PORT="${{ vars.SSH_PORT }}"
@@ -151,26 +143,20 @@ jobs:
           if [[ "${#WEBROOT_PATHS[@]}" -gt 0 ]]; then
             rsync "${RSYNC_OPTS[@]}" "${WEBROOT_PATHS[@]}" "${SSH_DEST}:${REMOTE_BASE}"
           fi
-        # yamllint enable rule:line-length
 
       - name: Create the shared directory if it doesn't exist
-        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/shared'
 
       - name: Create the uploads directory if it doesn't exist
-        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'mkdir -p ~/deploy/shared/uploads'
 
       - name: Symlink uploads directory
-        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'rm -rf ~/deploy/releases/${{ env.RELEASE_ID }}/wp-content/uploads && ln -sfn ~/deploy/shared/uploads ~/deploy/releases/${{ env.RELEASE_ID }}/wp-content/uploads'
 
       - name: Symlink .env file
-        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'touch ~/deploy/shared/.env && ln -sfn ~/deploy/shared/.env ~/deploy/releases/${{ env.RELEASE_ID }}/.env'
 
       - name: Persist Wordfence WAF file and wflogs directory
-        # yamllint disable rule:line-length
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} '
             set -e
@@ -207,11 +193,9 @@ jobs:
             rm -rf "$RELEASE_DIR/wp-content/wflogs"
             ln -sfn "$SHARED_DIR/wflogs" "$RELEASE_DIR/wp-content/wflogs"
           '
-        # yamllint enable rule:line-length
 
       - name: Check if WordPress is already installed
         id: check-wp-installed
-        # yamllint disable rule:line-length
         run: |
           if ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ env.RELEASE_ID }} && wp core is-installed'; then
             echo "installed=true" >> "$GITHUB_OUTPUT"
@@ -219,20 +203,16 @@ jobs:
             echo "installed=false" >> "$GITHUB_OUTPUT"
             echo "::warning::WordPress isn't installed on this site yet."
           fi
-        # yamllint enable rule:line-length
 
       - name: Install language packs
         if: steps.check-wp-installed.outputs.installed == 'true'
-        # yamllint disable rule:line-length
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/deploy/releases/${{ env.RELEASE_ID }} && \
           rm -rf wp-content/languages && \
           wp --skip-plugins --skip-themes language core install "${{ inputs.WP_LANG }}" && \
           wp --skip-plugins --skip-themes option set WPLANG "${{ inputs.WP_LANG }}"'
-        # yamllint enable rule:line-length
 
       - name: Promote release symlink
-        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'ln -sfn ~/deploy/releases/${{ env.RELEASE_ID }} ~/public'
 
       - name: Test the new release with smoke test
@@ -256,7 +236,6 @@ jobs:
 
       - name: Rollback deployment on failure
         if: failure()
-        # yamllint disable rule:line-length
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} '
             PREVIOUS_RELEASE="${{ steps.getCurrentRelease.outputs.current_release_link }}"
@@ -267,7 +246,6 @@ jobs:
             fi
             rm -rf ~/deploy/releases/${{ env.RELEASE_ID }}
           '
-        # yamllint enable rule:line-length
 
       - name: Reset OPcache
         if: success()
@@ -277,7 +255,6 @@ jobs:
           SITE_URL: ${{ vars.SITE_URL }}
           BASIC_AUTH_USERNAME: ${{ secrets.BASIC_AUTH_USERNAME }}
           BASIC_AUTH_PASSWORD: ${{ secrets.BASIC_AUTH_PASSWORD }}
-        # yamllint disable rule:line-length
         run: |
           if [ -z "${OPCACHE_PURGE_TOKEN}" ]; then
             echo 'OPCACHE_PURGE_TOKEN not configured - skipping OPcache reset.'
@@ -297,22 +274,17 @@ jobs:
           else
             echo "::warning::OPcache purge not confirmed (mu-plugin missing, token mismatch, or edge block). Deploy unaffected."
           fi
-        # yamllint enable rule:line-length
 
       - name: Clear Kinsta site cache if deployment does not fail
         if: success() && steps.check-wp-installed.outputs.installed == 'true'
-        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && wp --skip-plugins --skip-themes kinsta cache purge --site'
 
       - name: Install plugin and theme language packs
         if: steps.check-wp-installed.outputs.installed == 'true'
-        # yamllint disable rule:line-length
         run: |
           ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} 'cd ~/public && \
           wp --skip-plugins --skip-themes language plugin install --all "${{ inputs.WP_LANG }}" && \
           wp --skip-plugins --skip-themes language theme install --all "${{ inputs.WP_LANG }}"'
-        # yamllint enable rule:line-length
 
       - name: Cleanup old deployments
-        # yamllint disable-line rule:line-length
         run: ssh ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} -p ${{ vars.SSH_PORT }} "cd ~/deploy/releases && ls -t | tail -n +4 | xargs -r rm -rf"

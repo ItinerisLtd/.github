@@ -157,26 +157,22 @@ jobs:
       - name: Validate TRELLIS_REPOSITORY format
         env:
           TRELLIS_REPOSITORY: ${{ inputs.TRELLIS_REPOSITORY }}
-        # yamllint disable rule:line-length
         run: |
           set -euo pipefail
           if ! [[ "$TRELLIS_REPOSITORY" =~ ^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$ ]]; then
             echo "TRELLIS_REPOSITORY '$TRELLIS_REPOSITORY' is not in 'owner/repo' format." >&2
             exit 1
           fi
-        # yamllint enable rule:line-length
 
       - name: Validate ENVIRONMENT for filesystem use
         env:
           ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
-        # yamllint disable rule:line-length
         run: |
           set -euo pipefail
           if ! [[ "$ENVIRONMENT" =~ ^[a-z0-9_-]+$ ]]; then
             echo "ENVIRONMENT must be lowercase, containing only letters, numbers, hyphens, and underscores, since it is used as a case-sensitive Trellis filesystem path (group_vars/<environment> and hosts/<environment>) even though GitHub Actions' == is case-insensitive." >&2
             exit 1
           fi
-        # yamllint enable rule:line-length
 
       - name: Checkout shared actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -195,10 +191,8 @@ jobs:
 
       - name: Resolve canonical domain from Trellis
         id: resolve-domain
-        # yamllint disable-line rule:line-length
         uses: ./.itineris-actions/.github/actions/trellis-resolve-canonical-domain
         with:
-          # yamllint disable-line rule:line-length
           WORDPRESS_SITES_FILE: trellis/group_vars/${{ inputs.ENVIRONMENT }}/wordpress_sites.yml
           BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
 
@@ -262,7 +256,6 @@ jobs:
           REPO_PAT: ${{ secrets.REPO_PAT }}
           SSH_USER: ${{ steps.ssh.outputs.SSH_USER }}
           BEDROCK_ALIAS_FILE: ${{ inputs.BEDROCK_ALIAS_FILE }}
-        # yamllint disable rule:line-length
         run: |
           set -euo pipefail
           if [[ -z "$APP_ID" || -z "$PRIVATE_KEY" || -z "$REPO_PAT" ]]; then
@@ -285,7 +278,6 @@ jobs:
             echo "BEDROCK_ALIAS_FILE contains unexpected characters." >&2
             exit 1
           fi
-        # yamllint enable rule:line-length
 
       - name: Compute repository short names
         id: repo-names
@@ -294,7 +286,6 @@ jobs:
           TRELLIS_REPOSITORY: ${{ inputs.TRELLIS_REPOSITORY }}
           BEDROCK_REPOSITORY: ${{ github.repository }}
           EXPECTED_OWNER: ${{ github.repository_owner }}
-        # yamllint disable rule:line-length
         run: |
           set -euo pipefail
           TRELLIS_OWNER="${TRELLIS_REPOSITORY%%/*}"
@@ -306,12 +297,10 @@ jobs:
             printf 'TRELLIS_REPO_SHORT=%s\n' "${TRELLIS_REPOSITORY#*/}"
             printf 'BEDROCK_REPO_SHORT=%s\n' "${BEDROCK_REPOSITORY#*/}"
           } >>"$GITHUB_OUTPUT"
-        # yamllint enable rule:line-length
 
       - name: Generate inventory bot token
         id: inventory-bot-token
         if: env.SYNC_ENABLED == 'true'
-        # yamllint disable-line rule:line-length
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           client-id: ${{ secrets.TRELLIS_INVENTORY_BOT_APP_ID }}
@@ -344,7 +333,6 @@ jobs:
         if: env.SYNC_ENABLED == 'true'
         env:
           ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
-        # yamllint disable rule:line-length
         run: |
           set -euo pipefail
           if diff -q "$RUNNER_TEMP/hosts.orig" "trellis/hosts/$ENVIRONMENT" >/dev/null; then
@@ -352,7 +340,6 @@ jobs:
           else
             echo "CHANGED=true" >>"$GITHUB_OUTPUT"
           fi
-        # yamllint enable rule:line-length
 
       - name: Sync Trellis inventory
         if: >-
@@ -363,7 +350,6 @@ jobs:
           REPOSITORY: ${{ inputs.TRELLIS_REPOSITORY }}
           FILE_PATH: hosts/${{ inputs.ENVIRONMENT }}
           CONTENT_FILE: trellis/hosts/${{ inputs.ENVIRONMENT }}
-          # yamllint disable-line rule:line-length
           COMMIT_MESSAGE: "chore(hosts): update ${{ inputs.ENVIRONMENT }} SSH details"
           CHECK_NAMES: ${{ inputs.TRELLIS_CI_CHECK_NAMES }}
           GITHUB_TOKEN: ${{ steps.inventory-bot-token.outputs.token }}
@@ -397,7 +383,6 @@ jobs:
         if: env.SYNC_ENABLED == 'true'
         env:
           BEDROCK_ALIAS_FILE: ${{ inputs.BEDROCK_ALIAS_FILE }}
-        # yamllint disable rule:line-length
         run: |
           set -euo pipefail
           if diff -q "$RUNNER_TEMP/alias.orig" "bedrock/$BEDROCK_ALIAS_FILE" >/dev/null; then
@@ -405,7 +390,6 @@ jobs:
           else
             echo "CHANGED=true" >>"$GITHUB_OUTPUT"
           fi
-        # yamllint enable rule:line-length
 
       - name: Sync Bedrock alias
         if: >-
@@ -416,7 +400,6 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           FILE_PATH: ${{ inputs.BEDROCK_ALIAS_FILE }}
           CONTENT_FILE: bedrock/${{ inputs.BEDROCK_ALIAS_FILE }}
-          # yamllint disable-line rule:line-length
           COMMIT_MESSAGE: "chore(alias): update ${{ inputs.ENVIRONMENT }} SSH alias"
           CHECK_NAMES: ${{ inputs.BEDROCK_CI_CHECK_NAMES }}
           GITHUB_TOKEN: ${{ steps.inventory-bot-token.outputs.token }}

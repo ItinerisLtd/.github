@@ -32,7 +32,6 @@ on:
 
 jobs:
   check-theme-changes:
-    # yamllint disable-line rule:line-length
     if: ${{ inputs.THEME_NAME != '' && inputs.THEME_NAME != 'xxxTHEME_NAMExxx' }}
     runs-on: ubuntu-latest
     outputs:
@@ -41,13 +40,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - id: diff
-        # yamllint disable rule:line-length
         run: |
           git fetch --no-tags --prune --depth=1 origin ${{ github.event.repository.default_branch }}
           CHANGED_FILES=$(git diff origin/${{ github.event.repository.default_branch }} HEAD --name-only --diff-filter=ACMRT web/app/themes/${{ inputs.THEME_NAME }} || echo '')
           FILES_CHANGED=$([[ -z "${CHANGED_FILES}" ]] && echo 'false' || echo 'true')
           echo "THEME_CHANGED=${FILES_CHANGED}" >> "${GITHUB_OUTPUT}"
-        # yamllint enable rule:line-length
 
   node:
     name: build-production-assets
@@ -67,7 +64,6 @@ jobs:
         with:
           node-version: ${{ inputs.NODE_VERSION }}
           cache: yarn
-          # yamllint disable-line rule:line-length
           cache-dependency-path: web/app/themes/${{ inputs.THEME_NAME }}/yarn.lock
         env:
           FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
@@ -75,12 +71,10 @@ jobs:
           ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
 
       - name: Configure git auth for org packages
-        # yamllint disable rule:line-length
         run: |
           if [ -n "${ITINERIS_REPO_READ_TOKEN}" ]; then
             git config --global url."https://x-access-token:${ITINERIS_REPO_READ_TOKEN}@github.com/ItinerisLtd/".insteadOf "https://github.com/ItinerisLtd/"
           fi
-        # yamllint enable rule:line-length
         env:
           ITINERIS_REPO_READ_TOKEN: ${{ secrets.ITINERIS_REPO_READ_TOKEN }}
 
@@ -94,7 +88,6 @@ jobs:
 
       - name: Generate Font Awesome Blade Icons
         working-directory: web/app/themes/${{ inputs.THEME_NAME }}
-        # yamllint disable-line rule:line-length
         run: grep --quiet 'icons:prepare' package.json && yarn icons:prepare || echo 'No icons to prepare'
         env:
           FONTAWESOME_NPM_AUTH_TOKEN: ${{ secrets.FONTAWESOME_NPM_AUTH_TOKEN }}
@@ -134,13 +127,11 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          # yamllint disable-line rule:line-length
           key: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-
 
       - if: ${{ env.PRIVATE_PACKAGIST_TOKEN != '' }}
         name: Setup Composer Private Packagist authentication
-        # yamllint disable-line rule:line-length
         run: composer config --global --auth http-basic.repo.packagist.com itineris ${{ env.PRIVATE_PACKAGIST_TOKEN }}
 
       - name: Install Composer dependencies

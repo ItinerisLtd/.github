@@ -124,7 +124,7 @@ jobs:
       - name: Connect to Tailscale
         uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd
         with:
-          version: "1.102.3"
+          version: ${{ vars.TAILSCALE_VERSION }}
           oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
           args: "--exit-node=${{ secrets.TAILSCALE_EXIT_NODE }}"

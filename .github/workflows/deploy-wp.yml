@@ -73,6 +73,16 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ITINERIS_NPM_AUTH_TOKEN: ${{ secrets.ITINERIS_NPM_AUTH_TOKEN }}
 
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd
+        with:
+          version: ${{ vars.TAILSCALE_VERSION }}
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          args: "--exit-node=${{ secrets.TAILSCALE_EXIT_NODE }}"
+          ping: ${{ secrets.TAILSCALE_EXIT_NODE }}
+          tags: tag:ci
+
       - name: Install Dependencies Composer [WordPress]
         run: composer install --no-ansi --no-dev --no-interaction --no-progress --optimize-autoloader --no-scripts --classmap-authoritative
 
@@ -88,16 +98,6 @@ jobs:
         with:
           key: ${{ secrets.SSH_KEY }}
           known_hosts: ${{ secrets.KNOWN_HOSTS }}
-
-      - name: Connect to Tailscale
-        uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd
-        with:
-          version: "1.102.3"
-          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
-          args: "--exit-node=${{ secrets.TAILSCALE_EXIT_NODE }}"
-          ping: ${{ secrets.TAILSCALE_EXIT_NODE }}
-          tags: tag:ci
 
       - name: Get current release symlink target
         id: getCurrentRelease

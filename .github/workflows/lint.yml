@@ -8,12 +8,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       YAML_CHANGED: ${{ steps.diff.outputs.YAML_CHANGED }}
       WORKFLOWS_CHANGED: ${{ steps.diff.outputs.WORKFLOWS_CHANGED }}
+      SHELL_CHANGED: ${{ steps.diff.outputs.SHELL_CHANGED }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -25,13 +31,18 @@ jobs:
           CHANGED_FILES=$(git diff --name-only HEAD^1 HEAD)
           YAML_CHANGED=$(grep -qE '\.ya?ml$' <<< "${CHANGED_FILES}" && echo 'true' || echo 'false')
           WORKFLOWS_CHANGED=$(grep -qE '^\.github/(workflows/|actionlint-matcher\.json$)' <<< "${CHANGED_FILES}" && echo 'true' || echo 'false')
-          echo "YAML_CHANGED=${YAML_CHANGED}" >> "${GITHUB_OUTPUT}"
-          echo "WORKFLOWS_CHANGED=${WORKFLOWS_CHANGED}" >> "${GITHUB_OUTPUT}"
+          SHELL_CHANGED=$(grep -qE '(\.sh|^\.github/workflows/lint\.yml)$' <<< "${CHANGED_FILES}" && echo 'true' || echo 'false')
+          {
+            echo "YAML_CHANGED=${YAML_CHANGED}"
+            echo "WORKFLOWS_CHANGED=${WORKFLOWS_CHANGED}"
+            echo "SHELL_CHANGED=${SHELL_CHANGED}"
+          } >> "${GITHUB_OUTPUT}"
 
   yamllint:
     needs: changes
     if: ${{ needs.changes.outputs.YAML_CHANGED == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -43,20 +54,43 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.WORKFLOWS_CHANGED == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - name: Download actionlint
-        id: get_actionlint
-        run: |
-          curl -fsSL -o "${RUNNER_TEMP}/download-actionlint.bash" https://raw.githubusercontent.com/rhysd/actionlint/914e7df21a07ef503a81201c76d2b11c789d3fca/scripts/download-actionlint.bash
-          bash "${RUNNER_TEMP}/download-actionlint.bash" 1.7.12
-        shell: bash
+      - run: echo "::add-matcher::.github/actionlint-matcher.json"
       - name: Check workflow files
-        env:
-          ACTIONLINT: ${{ steps.get_actionlint.outputs.executable }}
+        uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+        with:
+          args: -color
+
+  shellcheck:
+    needs: changes
+    if: ${{ needs.changes.outputs.SHELL_CHANGED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check shell scripts
         run: |
-          echo "::add-matcher::.github/actionlint-matcher.json"
-          "${ACTIONLINT}" -color
+          git ls-files -z '*.sh' \
+            | xargs -0 -r docker run --rm --volume "${PWD}:/mnt" --workdir /mnt koalaman/shellcheck@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d --external-sources --source-path=SCRIPTDIR --format=json1 \
+            | jq -r '.comments[] | "::\(if .level == "error" or .level == "warning" then .level else "notice" end) file=\(.file),line=\(.line),endLine=\(.endLine),col=\(.column),endColumn=\(.endColumn),title=SC\(.code)::\(.message)"'
         shell: bash
+
+  shfmt:
+    needs: changes
+    if: ${{ needs.changes.outputs.SHELL_CHANGED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check shell script formatting
+        uses: docker://mvdan/shfmt@sha256:8c06884a35683d8763fba6c0d9484d11a61a96da65f8d497d6f625825a6043f2
+        with:
+          args: -d .

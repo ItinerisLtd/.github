@@ -9,9 +9,19 @@ on:
         type: number
         default: 20
         required: false
+      NODE_VERSION_FILE:
+        type: string
+        description: Path to a Node version file relative to the repository root (e.g. .nvmrc), takes precedence over NODE_VERSION
+        default: ''
+        required: false
       PHP_VERSION:
         type: number
         default: 8.1
+        required: false
+      PHP_VERSION_FILE:
+        type: string
+        description: Path to a file holding only the PHP version, relative to the repository root (e.g. .php-version), takes precedence over PHP_VERSION
+        default: ''
         required: false
       NPM_BUILD_CMD:
         type: string
@@ -23,11 +33,11 @@ on:
       PRIVATE_PACKAGIST_TOKEN:
         required: false
       TAILSCALE_OAUTH_CLIENT_ID:
-        required: true
+        required: false
       TAILSCALE_OAUTH_SECRET:
-        required: true
+        required: false
       TAILSCALE_EXIT_NODE:
-        required: true
+        required: false
 
 jobs:
   check-theme-changes:
@@ -51,11 +61,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
-      - name: Setup Node ${{ inputs.NODE_VERSION }}
+      - name: Setup Node ${{ inputs.NODE_VERSION_FILE || inputs.NODE_VERSION }}
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: ${{ inputs.NODE_VERSION }}
+          node-version: ${{ inputs.NODE_VERSION_FILE == '' && inputs.NODE_VERSION || '' }}
+          node-version-file: ${{ inputs.NODE_VERSION_FILE }}
           cache: yarn
           cache-dependency-path: yarn.lock
         env:
@@ -87,24 +100,29 @@ jobs:
       PRIVATE_PACKAGIST_TOKEN: ${{ secrets.PRIVATE_PACKAGIST_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
-      - name: Setup PHP ${{ inputs.PHP_VERSION }}
+      - name: Setup PHP ${{ inputs.PHP_VERSION_FILE || inputs.PHP_VERSION }}
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
-          php-version: ${{ inputs.PHP_VERSION }}
+          php-version: ${{ inputs.PHP_VERSION_FILE == '' && inputs.PHP_VERSION || '' }}
+          php-version-file: ${{ inputs.PHP_VERSION_FILE }}
         env:
           COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get composer cache directory
         id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> "${GITHUB_OUTPUT}"
+        run: |
+          echo "dir=$(composer config cache-files-dir)" >> "${GITHUB_OUTPUT}"
+          echo "php=$(php -r 'echo PHP_MAJOR_VERSION, ".", PHP_MINOR_VERSION;')" >> "${GITHUB_OUTPUT}"
 
       - name: Cache dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-
+          key: ${{ runner.os }}-${{ steps.composer-cache.outputs.php }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-${{ steps.composer-cache.outputs.php }}-composer-
 
       - if: ${{ env.PRIVATE_PACKAGIST_TOKEN != '' }}
         name: Connect to Tailscale
@@ -119,7 +137,7 @@ jobs:
 
       - if: ${{ env.PRIVATE_PACKAGIST_TOKEN != '' }}
         name: Setup Composer Private Packagist authentication
-        run: composer config --global --auth http-basic.repo.packagist.com itineris ${{ env.PRIVATE_PACKAGIST_TOKEN }}
+        run: composer config --global --auth http-basic.repo.packagist.com itineris "${PRIVATE_PACKAGIST_TOKEN}"
 
       - name: Install Composer dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader

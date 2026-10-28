@@ -14,6 +14,7 @@ jobs:
     outputs:
       YAML_CHANGED: ${{ steps.diff.outputs.YAML_CHANGED }}
       WORKFLOWS_CHANGED: ${{ steps.diff.outputs.WORKFLOWS_CHANGED }}
+      SHELL_CHANGED: ${{ steps.diff.outputs.SHELL_CHANGED }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -25,8 +26,12 @@ jobs:
           CHANGED_FILES=$(git diff --name-only HEAD^1 HEAD)
           YAML_CHANGED=$(grep -qE '\.ya?ml$' <<< "${CHANGED_FILES}" && echo 'true' || echo 'false')
           WORKFLOWS_CHANGED=$(grep -qE '^\.github/(workflows/|actionlint-matcher\.json$)' <<< "${CHANGED_FILES}" && echo 'true' || echo 'false')
-          echo "YAML_CHANGED=${YAML_CHANGED}" >> "${GITHUB_OUTPUT}"
-          echo "WORKFLOWS_CHANGED=${WORKFLOWS_CHANGED}" >> "${GITHUB_OUTPUT}"
+          SHELL_CHANGED=$(grep -qE '\.sh$' <<< "${CHANGED_FILES}" && echo 'true' || echo 'false')
+          {
+            echo "YAML_CHANGED=${YAML_CHANGED}"
+            echo "WORKFLOWS_CHANGED=${WORKFLOWS_CHANGED}"
+            echo "SHELL_CHANGED=${SHELL_CHANGED}"
+          } >> "${GITHUB_OUTPUT}"
 
   yamllint:
     needs: changes
@@ -60,3 +65,13 @@ jobs:
           echo "::add-matcher::.github/actionlint-matcher.json"
           "${ACTIONLINT}" -color
         shell: bash
+
+  shellcheck:
+    needs: changes
+    if: ${{ needs.changes.outputs.SHELL_CHANGED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: git ls-files -z '*.sh' | xargs -0 shellcheck --external-sources --source-path=SCRIPTDIR

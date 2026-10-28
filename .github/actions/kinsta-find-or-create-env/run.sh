@@ -19,7 +19,10 @@ fi
 SCRATCH_DIR="${RUNNER_TEMP:?RUNNER_TEMP is not set}"
 OP_JSON_FILE="$SCRATCH_DIR/kinsta-op.json"
 
-case "$(tr '[:upper:]' '[:lower:]' <<<"$TARGET_ENV")" in
+TARGET_ENV_LOWER="$(tr '[:upper:]' '[:lower:]' <<<"$TARGET_ENV")"
+SOURCE_ENV_LOWER="$(tr '[:upper:]' '[:lower:]' <<<"${INPUT_SOURCE_ENVIRONMENT:-live}")"
+
+case "$TARGET_ENV_LOWER" in
 live | production)
 	echo "Refusing to create or reconfigure the '$TARGET_ENV' environment." >&2
 	echo "This workflow provisions non-production environments only." >&2
@@ -27,7 +30,7 @@ live | production)
 	;;
 esac
 
-if [[ "$(tr '[:upper:]' '[:lower:]' <<<"$TARGET_ENV")" == "$(tr '[:upper:]' '[:lower:]' <<<"${INPUT_SOURCE_ENVIRONMENT:-live}")" ]]; then
+if [[ "$TARGET_ENV_LOWER" == "$SOURCE_ENV_LOWER" ]]; then
 	echo "Target and source environment are both '$TARGET_ENV'." >&2
 	echo "Refusing to reconfigure the source environment in place." >&2
 	exit 13

@@ -61,7 +61,7 @@ jobs:
           persist-credentials: false
       - run: echo "::add-matcher::.github/actionlint-matcher.json"
       - name: Check workflow files
-        uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+        uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
         with:
           args: -color
 
@@ -75,7 +75,10 @@ jobs:
         with:
           persist-credentials: false
       - name: Check shell scripts
-        run: git ls-files -z '*.sh' | xargs -0 -r docker run --rm --volume "${PWD}:/mnt" --workdir /mnt koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d --external-sources --source-path=SCRIPTDIR
+        run: |
+          git ls-files -z '*.sh' \
+            | xargs -0 -r docker run --rm --volume "${PWD}:/mnt" --workdir /mnt koalaman/shellcheck@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d --external-sources --source-path=SCRIPTDIR --format=json1 \
+            | jq -r '.comments[] | "::\(if .level == "error" or .level == "warning" then .level else "notice" end) file=\(.file),line=\(.line),endLine=\(.endLine),col=\(.column),endColumn=\(.endColumn),title=SC\(.code)::\(.message)"'
         shell: bash
 
   shfmt:
@@ -88,6 +91,6 @@ jobs:
         with:
           persist-credentials: false
       - name: Check shell script formatting
-        uses: docker://mvdan/shfmt:v3.14.1@sha256:8c06884a35683d8763fba6c0d9484d11a61a96da65f8d497d6f625825a6043f2
+        uses: docker://mvdan/shfmt@sha256:8c06884a35683d8763fba6c0d9484d11a61a96da65f8d497d6f625825a6043f2
         with:
           args: -d .

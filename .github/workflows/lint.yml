@@ -31,7 +31,7 @@ jobs:
           CHANGED_FILES=$(git diff --name-only HEAD^1 HEAD)
           YAML_CHANGED=$(grep -qE '\.ya?ml$' <<< "${CHANGED_FILES}" && echo 'true' || echo 'false')
           WORKFLOWS_CHANGED=$(grep -qE '^\.github/(workflows/|actionlint-matcher\.json$)' <<< "${CHANGED_FILES}" && echo 'true' || echo 'false')
-          SHELL_CHANGED=$(grep -qE '\.sh$' <<< "${CHANGED_FILES}" && echo 'true' || echo 'false')
+          SHELL_CHANGED=$(grep -qE '(\.sh|^\.github/workflows/lint\.yml)$' <<< "${CHANGED_FILES}" && echo 'true' || echo 'false')
           {
             echo "YAML_CHANGED=${YAML_CHANGED}"
             echo "WORKFLOWS_CHANGED=${WORKFLOWS_CHANGED}"
@@ -74,7 +74,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - run: git ls-files -z '*.sh' | xargs -0 shellcheck --external-sources --source-path=SCRIPTDIR
+      - name: Check shell scripts
+        run: git ls-files -z '*.sh' | xargs -0 -r docker run --rm --volume "${PWD}:/mnt" --workdir /mnt koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d --external-sources --source-path=SCRIPTDIR
+        shell: bash
 
   shfmt:
     needs: changes

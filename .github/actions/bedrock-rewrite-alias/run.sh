@@ -8,8 +8,8 @@ TRELLIS_ENVIRONMENT="${INPUT_TRELLIS_ENVIRONMENT:-}"
 ALIAS_FILE="${INPUT_ALIAS_FILE:-}"
 
 if [[ -z "$SSH_USER" || -z "$SSH_HOST" || -z "$SSH_PORT" || -z "$TRELLIS_ENVIRONMENT" || -z "$ALIAS_FILE" ]]; then
-  echo "Missing required input(s)" >&2
-  exit 2
+	echo "Missing required input(s)" >&2
+	exit 2
 fi
 
 TRELLIS_ENV_NORMALISED="$(tr '[:upper:]' '[:lower:]' <<<"$TRELLIS_ENVIRONMENT")"
@@ -20,37 +20,37 @@ read -r TRELLIS_ENV_NORMALISED <<<"$TRELLIS_ENV_NORMALISED"
 # file (which wouldn't).
 TRELLIS_ENVIRONMENT="$TRELLIS_ENV_NORMALISED"
 case "$TRELLIS_ENV_NORMALISED" in
-  live | production)
-    echo "Refusing to rewrite SSH alias for '$TRELLIS_ENVIRONMENT'." >&2
-    echo "This rewrite is for non-production environments only." >&2
-    exit 1
-    ;;
+live | production)
+	echo "Refusing to rewrite SSH alias for '$TRELLIS_ENVIRONMENT'." >&2
+	echo "This rewrite is for non-production environments only." >&2
+	exit 1
+	;;
 esac
 
 IPV4_OCTET='(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])'
 if ! [[ "$SSH_HOST" =~ ^${IPV4_OCTET}(\.${IPV4_OCTET}){3}$ ]]; then
-  echo "SSH_HOST '$SSH_HOST' is not an IPv4 address." >&2
-  exit 1
+	echo "SSH_HOST '$SSH_HOST' is not an IPv4 address." >&2
+	exit 1
 fi
 
 if ! [[ "$SSH_PORT" =~ ^[0-9]{1,5}$ ]]; then
-  echo "SSH_PORT '$SSH_PORT' is not a number (or has too many digits for a valid port)." >&2
-  exit 1
+	echo "SSH_PORT '$SSH_PORT' is not a number (or has too many digits for a valid port)." >&2
+	exit 1
 fi
 
 if ((10#$SSH_PORT < 1 || 10#$SSH_PORT > 65535)); then
-  echo "SSH_PORT '$SSH_PORT' is not a valid TCP port (1-65535)." >&2
-  exit 1
+	echo "SSH_PORT '$SSH_PORT' is not a valid TCP port (1-65535)." >&2
+	exit 1
 fi
 
 if ! [[ "$SSH_USER" =~ ^[A-Za-z0-9_-]+$ ]]; then
-  echo "SSH_USER '$SSH_USER' contains unexpected characters." >&2
-  exit 1
+	echo "SSH_USER '$SSH_USER' contains unexpected characters." >&2
+	exit 1
 fi
 
 if [[ ! -f "$ALIAS_FILE" ]]; then
-  echo "$ALIAS_FILE does not exist." >&2
-  exit 1
+	echo "$ALIAS_FILE does not exist." >&2
+	exit 1
 fi
 
 # Normalise CRLF to LF before any exact-line matching below: grep -x and
@@ -67,8 +67,8 @@ HEADER_REGEX="^[\"']?@${TRELLIS_ENVIRONMENT}[\"']?:\$"
 
 HEADER_COUNT="$(grep -cE "$HEADER_REGEX" "$ALIAS_FILE" || true)"
 if [[ "$HEADER_COUNT" != "1" ]]; then
-  echo "Expected exactly one '@$TRELLIS_ENVIRONMENT:' header (bare or quoted) in $ALIAS_FILE, found $HEADER_COUNT." >&2
-  exit 1
+	echo "Expected exactly one '@$TRELLIS_ENVIRONMENT:' header (bare or quoted) in $ALIAS_FILE, found $HEADER_COUNT." >&2
+	exit 1
 fi
 
 SSH_LINE_COUNT="$(awk -v header="$HEADER_REGEX" '
@@ -78,8 +78,8 @@ SSH_LINE_COUNT="$(awk -v header="$HEADER_REGEX" '
   END { print count+0 }
 ' "$ALIAS_FILE")"
 if [[ "$SSH_LINE_COUNT" != "1" ]]; then
-  echo "Expected exactly one 'ssh:' line in the '@$TRELLIS_ENVIRONMENT:' block of $ALIAS_FILE, found $SSH_LINE_COUNT." >&2
-  exit 1
+	echo "Expected exactly one 'ssh:' line in the '@$TRELLIS_ENVIRONMENT:' block of $ALIAS_FILE, found $SSH_LINE_COUNT." >&2
+	exit 1
 fi
 
 NEW_SSH="$SSH_USER@$SSH_HOST:$SSH_PORT"
@@ -106,9 +106,9 @@ BLOCK_CONTENT="$(awk -v header="$HEADER_REGEX" '
 ' "$ALIAS_FILE")"
 
 if ! grep -qF "ssh: \"$NEW_SSH\"" <<<"$BLOCK_CONTENT"; then
-  echo "Failed to set ssh alias in the '@$TRELLIS_ENVIRONMENT:' block of $ALIAS_FILE." >&2
-  cat "$ALIAS_FILE" >&2
-  exit 1
+	echo "Failed to set ssh alias in the '@$TRELLIS_ENVIRONMENT:' block of $ALIAS_FILE." >&2
+	cat "$ALIAS_FILE" >&2
+	exit 1
 fi
 
 grep -A1 -E "$HEADER_REGEX" "$ALIAS_FILE"

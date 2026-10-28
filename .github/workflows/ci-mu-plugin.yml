@@ -16,18 +16,20 @@ on:
         required: false
     secrets:
       PRIVATE_PACKAGIST_TOKEN:
-        required: true
+        required: false
       TAILSCALE_OAUTH_CLIENT_ID:
-        required: true
+        required: false
       TAILSCALE_OAUTH_SECRET:
-        required: true
+        required: false
       TAILSCALE_EXIT_NODE:
-        required: true
+        required: false
 
 jobs:
   php:
     name: php-style-check
     runs-on: ubuntu-latest
+    env:
+      PRIVATE_PACKAGIST_TOKEN: ${{ secrets.PRIVATE_PACKAGIST_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
@@ -52,7 +54,8 @@ jobs:
           key: ${{ runner.os }}-${{ steps.composer-cache.outputs.php }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: ${{ runner.os }}-${{ steps.composer-cache.outputs.php }}-composer-
 
-      - name: Connect to Tailscale
+      - if: ${{ env.PRIVATE_PACKAGIST_TOKEN != '' }}
+        name: Connect to Tailscale
         uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd
         with:
           version: ${{ vars.TAILSCALE_VERSION }}
@@ -62,13 +65,15 @@ jobs:
           ping: ${{ secrets.TAILSCALE_EXIT_NODE }}
           tags: tag:ci
 
-      - name: Setup Composer Private Packagist authentication
-        run: composer config --global --auth http-basic.repo.packagist.com itineris ${{ secrets.PRIVATE_PACKAGIST_TOKEN }}
+      - if: ${{ env.PRIVATE_PACKAGIST_TOKEN != '' }}
+        name: Setup Composer Private Packagist authentication
+        run: composer config --global --auth http-basic.repo.packagist.com itineris "${PRIVATE_PACKAGIST_TOKEN}"
 
       - name: Install Composer dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader
 
-      - name: Disconnect from Tailscale
+      - if: ${{ env.PRIVATE_PACKAGIST_TOKEN != '' }}
+        name: Disconnect from Tailscale
         run: sudo tailscale down
 
       - run: composer run-script style:check

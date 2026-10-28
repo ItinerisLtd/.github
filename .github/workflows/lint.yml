@@ -75,3 +75,17 @@ jobs:
         with:
           persist-credentials: false
       - run: git ls-files -z '*.sh' | xargs -0 shellcheck --external-sources --source-path=SCRIPTDIR
+
+  shfmt:
+    needs: changes
+    if: ${{ needs.changes.outputs.SHELL_CHANGED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check shell script formatting
+        uses: docker://mvdan/shfmt:v3.14.1@sha256:8c06884a35683d8763fba6c0d9484d11a61a96da65f8d497d6f625825a6043f2
+        with:
+          args: -d .

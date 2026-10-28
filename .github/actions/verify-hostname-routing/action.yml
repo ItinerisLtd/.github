@@ -1,9 +1,13 @@
 ---
 name: verify-hostname-routing
-description: Confirm the hostname resolves and is served by Kinsta
+description: Confirm each hostname resolves and is served by Kinsta
 inputs:
   PRIMARY_DOMAIN:
     required: true
+  ADDITIONAL_DOMAINS:
+    description: Newline-separated hostnames to verify after PRIMARY_DOMAIN
+    required: false
+    default: ''
   USER_AGENT:
     description: User agent to send with the request
     required: false
@@ -21,6 +25,7 @@ runs:
       run: bash "${{ github.action_path }}/run.sh"
       env:
         INPUT_PRIMARY_DOMAIN: ${{ inputs.PRIMARY_DOMAIN }}
+        INPUT_ADDITIONAL_DOMAINS: ${{ inputs.ADDITIONAL_DOMAINS }}
         INPUT_USER_AGENT: ${{ inputs.USER_AGENT }}
         INPUT_MAX_ATTEMPTS: ${{ inputs.MAX_ATTEMPTS }}
         INPUT_SLEEP_SECONDS: ${{ inputs.SLEEP_SECONDS }}

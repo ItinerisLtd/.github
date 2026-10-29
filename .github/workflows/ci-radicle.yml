@@ -23,11 +23,11 @@ on:
       PRIVATE_PACKAGIST_TOKEN:
         required: false
       TAILSCALE_OAUTH_CLIENT_ID:
-        required: true
+        required: false
       TAILSCALE_OAUTH_SECRET:
-        required: true
+        required: false
       TAILSCALE_EXIT_NODE:
-        required: true
+        required: false
 
 jobs:
   check-theme-changes:
@@ -107,26 +107,11 @@ jobs:
           restore-keys: ${{ runner.os }}-${{ inputs.PHP_VERSION }}-composer-
 
       - if: ${{ env.PRIVATE_PACKAGIST_TOKEN != '' }}
-        name: Connect to Tailscale
-        uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd
-        with:
-          version: ${{ vars.TAILSCALE_VERSION }}
-          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
-          args: "--exit-node=${{ secrets.TAILSCALE_EXIT_NODE }}"
-          ping: ${{ secrets.TAILSCALE_EXIT_NODE }}
-          tags: tag:ci
-
-      - if: ${{ env.PRIVATE_PACKAGIST_TOKEN != '' }}
         name: Setup Composer Private Packagist authentication
         run: composer config --global --auth http-basic.repo.packagist.com itineris ${{ env.PRIVATE_PACKAGIST_TOKEN }}
 
       - name: Install Composer dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader
-
-      - if: ${{ env.PRIVATE_PACKAGIST_TOKEN != '' }}
-        name: Disconnect from Tailscale
-        run: sudo tailscale down
 
       # todo: decide if we want to run the lint and use laravel pint
       - name: Execute the Composer lint script

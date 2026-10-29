@@ -5,12 +5,29 @@ inputs:
   WORDPRESS_SITES_FILE:
     description: Path to group_vars/<environment>/wordpress_sites.yml
     required: true
+  SOURCE_WORDPRESS_SITES_FILE:
+    description: >-
+      Path to the source environment's wordpress_sites.yml. When set and
+      the site has more than one site_hosts entry, each additional source
+      canonical is paired by position with the target canonical for a
+      database search-replace.
+    required: false
+    default: ''
   BASE_DOMAIN:
-    description: Zone the resolved domain must belong to
+    description: Zone every resolved domain must belong to
     required: true
 outputs:
   PRIMARY_DOMAIN:
+    description: site_hosts[0] canonical
     value: ${{ steps.run.outputs.PRIMARY_DOMAIN }}
+  ADDITIONAL_DOMAINS:
+    description: Newline-separated canonicals of site_hosts[1..]
+    value: ${{ steps.run.outputs.ADDITIONAL_DOMAINS }}
+  SEARCH_REPLACE_PAIRS:
+    description: >-
+      Newline-separated source and target domains, tab-separated, longest
+      source first
+    value: ${{ steps.run.outputs.SEARCH_REPLACE_PAIRS }}
 runs:
   using: composite
   steps:
@@ -19,4 +36,6 @@ runs:
       run: bash "${{ github.action_path }}/run.sh"
       env:
         INPUT_WORDPRESS_SITES_FILE: ${{ inputs.WORDPRESS_SITES_FILE }}
+        # yamllint disable-line rule:line-length
+        INPUT_SOURCE_WORDPRESS_SITES_FILE: ${{ inputs.SOURCE_WORDPRESS_SITES_FILE }}
         INPUT_BASE_DOMAIN: ${{ inputs.BASE_DOMAIN }}

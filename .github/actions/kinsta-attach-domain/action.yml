@@ -1,6 +1,6 @@
 ---
 name: kinsta-attach-domain
-description: Attach the project hostname and emit its pointing record
+description: Attach the project hostnames and emit their pointing records
 inputs:
   SITE_ID:
     required: true
@@ -10,9 +10,15 @@ inputs:
     description: >-
       The already-resolved, already-validated canonical hostname to attach
     required: true
+  ADDITIONAL_DOMAINS:
+    description: >-
+      Newline-separated, already-validated hostnames to attach alongside
+      PRIMARY_DOMAIN, such as the other sites of a multisite network
+    required: false
+    default: ''
   BASE_DOMAIN:
     description: >-
-      Zone PRIMARY_DOMAIN must belong to (defence in depth against
+      Zone every domain must belong to (defence in depth against
       attaching an out-of-zone hostname)
     required: true
   KINSTA_API_URL:
@@ -24,6 +30,8 @@ outputs:
     value: ${{ steps.run.outputs.PRIMARY_DOMAIN }}
   DOMAIN_ID:
     value: ${{ steps.run.outputs.DOMAIN_ID }}
+  ADDITIONAL_DOMAINS:
+    value: ${{ steps.run.outputs.ADDITIONAL_DOMAINS }}
 runs:
   using: composite
   steps:
@@ -34,6 +42,7 @@ runs:
         INPUT_SITE_ID: ${{ inputs.SITE_ID }}
         INPUT_ENVIRONMENT_ID: ${{ inputs.ENVIRONMENT_ID }}
         INPUT_PRIMARY_DOMAIN: ${{ inputs.PRIMARY_DOMAIN }}
+        INPUT_ADDITIONAL_DOMAINS: ${{ inputs.ADDITIONAL_DOMAINS }}
         INPUT_BASE_DOMAIN: ${{ inputs.BASE_DOMAIN }}
         INPUT_KINSTA_API_URL: ${{ inputs.KINSTA_API_URL }}
         INPUT_KINSTA_API_KEY: ${{ inputs.KINSTA_API_KEY }}

@@ -19,7 +19,12 @@ on:
         required: false
         default: live
       RUN_SEARCH_AND_REPLACE:
-        description: Rewrite cloned database URLs when setting primary domain
+        description: >-
+          Rewrite cloned database URLs when setting the primary domain.
+          For a multisite network, also rewrite each additional site's
+          source domain, read from the source environment's Trellis
+          wordpress_sites.yml and paired with the target's site_hosts by
+          position.
         type: boolean
         required: false
         default: true
@@ -97,6 +102,11 @@ on:
       DOMAIN_ID:
         description: Kinsta domain id for primary domain
         value: ${{ jobs.provision.outputs.DOMAIN_ID }}
+      ADDITIONAL_DOMAINS:
+        description: >-
+          Newline-separated additional domains configured on the
+          environment, such as the other sites of a multisite network
+        value: ${{ jobs.provision.outputs.ADDITIONAL_DOMAINS }}
       SSH_USER:
         description: SSH user for the environment
         value: ${{ jobs.provision.outputs.SSH_USER }}
@@ -127,6 +137,7 @@ jobs:
       ENVIRONMENT_ID: ${{ steps.summary.outputs.ENVIRONMENT_ID }}
       PRIMARY_DOMAIN: ${{ steps.summary.outputs.PRIMARY_DOMAIN }}
       DOMAIN_ID: ${{ steps.summary.outputs.DOMAIN_ID }}
+      ADDITIONAL_DOMAINS: ${{ steps.summary.outputs.ADDITIONAL_DOMAINS }}
       SSH_USER: ${{ steps.summary.outputs.SSH_USER }}
       SSH_HOST: ${{ steps.summary.outputs.SSH_HOST }}
       SSH_PORT: ${{ steps.summary.outputs.SSH_PORT }}
@@ -189,7 +200,7 @@ jobs:
           path: trellis
           token: ${{ secrets.REPO_PAT }}
 
-      - name: Resolve canonical domain from Trellis
+      - name: Resolve canonical domains from Trellis
         id: resolve-domain
         uses: ./.itineris-actions/.github/actions/trellis-resolve-canonical-domain
         with:
@@ -206,7 +217,40 @@ jobs:
           KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
           KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
 
-      - name: Attach domain
+      - name: Resolve source Trellis environment
+        id: source-env
+        if: >-
+          ${{ inputs.RUN_SEARCH_AND_REPLACE
+          && (inputs.CONFIGURE_EXISTING
+          || steps.environment.outputs.CREATED == 'true')
+          && steps.resolve-domain.outputs.ADDITIONAL_DOMAINS != '' }}
+        env:
+          SOURCE_ENVIRONMENT: ${{ inputs.SOURCE_ENVIRONMENT }}
+        run: |
+          set -euo pipefail
+          TRELLIS_ENVIRONMENT="$SOURCE_ENVIRONMENT"
+          TRELLIS_ENVIRONMENT="${TRELLIS_ENVIRONMENT#"${TRELLIS_ENVIRONMENT%%[![:space:]]*}"}"
+          TRELLIS_ENVIRONMENT="${TRELLIS_ENVIRONMENT%"${TRELLIS_ENVIRONMENT##*[![:space:]]}"}"
+          TRELLIS_ENVIRONMENT="${TRELLIS_ENVIRONMENT,,}"
+          if [[ "$TRELLIS_ENVIRONMENT" == "live" ]]; then
+            TRELLIS_ENVIRONMENT=production
+          fi
+          if ! [[ "$TRELLIS_ENVIRONMENT" =~ ^[a-z0-9_-]+$ ]]; then
+            echo "SOURCE_ENVIRONMENT '$SOURCE_ENVIRONMENT' cannot name a Trellis group_vars directory; it may contain only letters, numbers, hyphens, and underscores." >&2
+            exit 1
+          fi
+          echo "WORDPRESS_SITES_FILE=trellis/group_vars/$TRELLIS_ENVIRONMENT/wordpress_sites.yml" >>"$GITHUB_OUTPUT"
+
+      - name: Resolve additional domain search-replace pairs
+        id: resolve-pairs
+        if: ${{ steps.source-env.outputs.WORDPRESS_SITES_FILE != '' }}
+        uses: ./.itineris-actions/.github/actions/trellis-resolve-canonical-domain
+        with:
+          WORDPRESS_SITES_FILE: trellis/group_vars/${{ inputs.ENVIRONMENT }}/wordpress_sites.yml
+          SOURCE_WORDPRESS_SITES_FILE: ${{ steps.source-env.outputs.WORDPRESS_SITES_FILE }}
+          BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
+
+      - name: Attach domains
         id: domain
         if: >-
           ${{ inputs.CONFIGURE_EXISTING
@@ -216,7 +260,20 @@ jobs:
           SITE_ID: ${{ inputs.KINSTA_SITE_ID }}
           ENVIRONMENT_ID: ${{ steps.environment.outputs.ENVIRONMENT_ID }}
           PRIMARY_DOMAIN: ${{ steps.resolve-domain.outputs.PRIMARY_DOMAIN }}
+          ADDITIONAL_DOMAINS: ${{ steps.resolve-domain.outputs.ADDITIONAL_DOMAINS }}
           BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
+          KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
+          KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
+
+      - name: Search-replace additional domains
+        if: >-
+          ${{ steps.domain.outputs.DOMAIN_ID != ''
+          && steps.resolve-pairs.outputs.SEARCH_REPLACE_PAIRS != '' }}
+        uses: ./.itineris-actions/.github/actions/kinsta-search-replace
+        with:
+          SITE_ID: ${{ inputs.KINSTA_SITE_ID }}
+          ENVIRONMENT_ID: ${{ steps.environment.outputs.ENVIRONMENT_ID }}
+          PAIRS: ${{ steps.resolve-pairs.outputs.SEARCH_REPLACE_PAIRS }}
           KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
           KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
 
@@ -231,11 +288,12 @@ jobs:
           KINSTA_API_URL: ${{ env.KINSTA_API_URL }}
           KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
 
-      - name: Verify hostname reaches Kinsta
+      - name: Verify hostnames reach Kinsta
         if: ${{ steps.domain.outputs.PRIMARY_DOMAIN != '' }}
         uses: ./.itineris-actions/.github/actions/verify-hostname-routing
         with:
           PRIMARY_DOMAIN: ${{ steps.domain.outputs.PRIMARY_DOMAIN }}
+          ADDITIONAL_DOMAINS: ${{ steps.domain.outputs.ADDITIONAL_DOMAINS }}
           USER_AGENT: ${{ secrets.USER_AGENT }}
 
       - name: Read SSH details
@@ -415,6 +473,7 @@ jobs:
           ENVIRONMENT_ID: ${{ steps.environment.outputs.ENVIRONMENT_ID }}
           PRIMARY_DOMAIN: ${{ steps.domain.outputs.PRIMARY_DOMAIN }}
           DOMAIN_ID: ${{ steps.domain.outputs.DOMAIN_ID }}
+          ADDITIONAL_DOMAINS: ${{ steps.domain.outputs.ADDITIONAL_DOMAINS }}
           SSH_USER: ${{ steps.ssh.outputs.SSH_USER }}
           SSH_HOST: ${{ steps.ssh.outputs.SSH_HOST }}
           SSH_PORT: ${{ steps.ssh.outputs.SSH_PORT }}
@@ -425,6 +484,7 @@ jobs:
             printf 'ENVIRONMENT_ID=%s\n' "$ENVIRONMENT_ID"
             printf 'PRIMARY_DOMAIN=%s\n' "$PRIMARY_DOMAIN"
             printf 'DOMAIN_ID=%s\n' "$DOMAIN_ID"
+            printf 'ADDITIONAL_DOMAINS<<__ADDITIONAL_DOMAINS__\n%s\n__ADDITIONAL_DOMAINS__\n' "$ADDITIONAL_DOMAINS"
             printf 'SSH_USER=%s\n' "$SSH_USER"
             printf 'SSH_HOST=%s\n' "$SSH_HOST"
             printf 'SSH_PORT=%s\n' "$SSH_PORT"

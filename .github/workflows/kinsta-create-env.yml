@@ -84,7 +84,11 @@ on:
       USER_AGENT:
         required: false
       REPO_PAT:
-        required: true
+        required: false
+      ITINERIS_DEPLOYER_CLIENT_ID:
+        required: false
+      ITINERIS_DEPLOYER_PRIVATE_KEY:
+        required: false
       TRELLIS_INVENTORY_BOT_APP_ID:
         required: false
       TRELLIS_INVENTORY_BOT_PRIVATE_KEY:
@@ -148,6 +152,8 @@ jobs:
       # inputs.* is available here since it's resolved before the job
       # starts, unlike steps.* outputs.
       SYNC_ENABLED: ${{ inputs.ENVIRONMENT == 'staging' }}
+      USE_DEPLOYER_APP: ${{ secrets.ITINERIS_DEPLOYER_CLIENT_ID != '' && secrets.ITINERIS_DEPLOYER_PRIVATE_KEY != '' }}
+      USE_INVENTORY_BOT_APP: ${{ secrets.TRELLIS_INVENTORY_BOT_APP_ID != '' && secrets.TRELLIS_INVENTORY_BOT_PRIVATE_KEY != '' }}
     steps:
       - name: Reject production environments
         env:
@@ -185,12 +191,53 @@ jobs:
             exit 1
           fi
 
+      - name: Check checkout credentials
+        env:
+          REPO_PAT: ${{ secrets.REPO_PAT }}
+        run: |
+          set -euo pipefail
+          if [[ "${USE_DEPLOYER_APP}" != 'true' && -z "${REPO_PAT}" ]]; then
+            echo "Pass ITINERIS_DEPLOYER_CLIENT_ID and ITINERIS_DEPLOYER_PRIVATE_KEY, or REPO_PAT." >&2
+            exit 1
+          fi
+
+      - name: Compute repository short names
+        id: repo-names
+        if: env.USE_DEPLOYER_APP == 'true' || env.SYNC_ENABLED == 'true'
+        env:
+          TRELLIS_REPOSITORY: ${{ inputs.TRELLIS_REPOSITORY }}
+          BEDROCK_REPOSITORY: ${{ github.repository }}
+          EXPECTED_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          TRELLIS_OWNER="${TRELLIS_REPOSITORY%%/*}"
+          if [[ "${TRELLIS_OWNER,,}" != "${EXPECTED_OWNER,,}" ]]; then
+            echo "TRELLIS_REPOSITORY's owner '${TRELLIS_OWNER}' does not match this workflow's owner '${EXPECTED_OWNER}'. The deployer App token is minted for a single owner, so a cross-owner Trellis repo is not supported." >&2
+            exit 1
+          fi
+          {
+            printf 'TRELLIS_REPO_SHORT=%s\n' "${TRELLIS_REPOSITORY#*/}"
+            printf 'BEDROCK_REPO_SHORT=%s\n' "${BEDROCK_REPOSITORY#*/}"
+          } >>"${GITHUB_OUTPUT}"
+
+      - name: Generate read token
+        id: read-token
+        if: env.USE_DEPLOYER_APP == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ secrets.ITINERIS_DEPLOYER_CLIENT_ID }}
+          private-key: ${{ secrets.ITINERIS_DEPLOYER_PRIVATE_KEY }}
+          repositories: |
+            ${{ steps.repo-names.outputs.TRELLIS_REPO_SHORT }}
+            .github
+          permission-contents: read
+
       - name: Checkout shared actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ItinerisLtd/.github
           ref: ${{ inputs.SHARED_ACTIONS_REF }}
-          token: ${{ secrets.REPO_PAT }}
+          token: ${{ steps.read-token.outputs.token || secrets.REPO_PAT }}
           path: .itineris-actions
           persist-credentials: false
 
@@ -199,7 +246,7 @@ jobs:
         with:
           repository: ${{ inputs.TRELLIS_REPOSITORY }}
           path: trellis
-          token: ${{ secrets.REPO_PAT }}
+          token: ${{ steps.read-token.outputs.token || secrets.REPO_PAT }}
 
       - name: Resolve canonical domains from Trellis
         id: resolve-domain
@@ -310,15 +357,12 @@ jobs:
       - name: Check inventory bot credentials
         if: env.SYNC_ENABLED == 'true'
         env:
-          APP_ID: ${{ secrets.TRELLIS_INVENTORY_BOT_APP_ID }}
-          PRIVATE_KEY: ${{ secrets.TRELLIS_INVENTORY_BOT_PRIVATE_KEY }}
-          REPO_PAT: ${{ secrets.REPO_PAT }}
           SSH_USER: ${{ steps.ssh.outputs.SSH_USER }}
           BEDROCK_ALIAS_FILE: ${{ inputs.BEDROCK_ALIAS_FILE }}
         run: |
           set -euo pipefail
-          if [[ -z "$APP_ID" || -z "$PRIVATE_KEY" || -z "$REPO_PAT" ]]; then
-            echo "TRELLIS_INVENTORY_BOT_APP_ID, TRELLIS_INVENTORY_BOT_PRIVATE_KEY, and REPO_PAT are required to sync SSH details." >&2
+          if [[ "${USE_DEPLOYER_APP}" != 'true' && "${USE_INVENTORY_BOT_APP}" != 'true' ]]; then
+            echo "ITINERIS_DEPLOYER_CLIENT_ID and ITINERIS_DEPLOYER_PRIVATE_KEY (or TRELLIS_INVENTORY_BOT_APP_ID and TRELLIS_INVENTORY_BOT_PRIVATE_KEY) are required to sync SSH details." >&2
             exit 1
           fi
           if [[ -z "$SSH_USER" ]]; then
@@ -338,32 +382,13 @@ jobs:
             exit 1
           fi
 
-      - name: Compute repository short names
-        id: repo-names
-        if: env.SYNC_ENABLED == 'true'
-        env:
-          TRELLIS_REPOSITORY: ${{ inputs.TRELLIS_REPOSITORY }}
-          BEDROCK_REPOSITORY: ${{ github.repository }}
-          EXPECTED_OWNER: ${{ github.repository_owner }}
-        run: |
-          set -euo pipefail
-          TRELLIS_OWNER="${TRELLIS_REPOSITORY%%/*}"
-          if [[ "${TRELLIS_OWNER,,}" != "${EXPECTED_OWNER,,}" ]]; then
-            echo "TRELLIS_REPOSITORY's owner '$TRELLIS_OWNER' does not match this workflow's owner '$EXPECTED_OWNER'. The inventory bot App token is minted for a single owner, so a cross-owner Trellis repo is not supported." >&2
-            exit 1
-          fi
-          {
-            printf 'TRELLIS_REPO_SHORT=%s\n' "${TRELLIS_REPOSITORY#*/}"
-            printf 'BEDROCK_REPO_SHORT=%s\n' "${BEDROCK_REPOSITORY#*/}"
-          } >>"$GITHUB_OUTPUT"
-
       - name: Generate inventory bot token
         id: inventory-bot-token
         if: env.SYNC_ENABLED == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
-          client-id: ${{ secrets.TRELLIS_INVENTORY_BOT_APP_ID }}
-          private-key: ${{ secrets.TRELLIS_INVENTORY_BOT_PRIVATE_KEY }}
+          client-id: ${{ env.USE_DEPLOYER_APP == 'true' && secrets.ITINERIS_DEPLOYER_CLIENT_ID || secrets.TRELLIS_INVENTORY_BOT_APP_ID }}
+          private-key: ${{ env.USE_DEPLOYER_APP == 'true' && secrets.ITINERIS_DEPLOYER_PRIVATE_KEY || secrets.TRELLIS_INVENTORY_BOT_PRIVATE_KEY }}
           repositories: |
             ${{ steps.repo-names.outputs.TRELLIS_REPO_SHORT }}
             ${{ steps.repo-names.outputs.BEDROCK_REPO_SHORT }}

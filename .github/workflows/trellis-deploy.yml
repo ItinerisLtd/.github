@@ -59,7 +59,11 @@ on:
         required: false
     secrets:
       REPO_PAT:
-        required: true
+        required: false
+      ITINERIS_DEPLOYER_CLIENT_ID:
+        required: false
+      ITINERIS_DEPLOYER_PRIVATE_KEY:
+        required: false
       TRELLIS_DEPLOY_SSH_PRIVATE_KEY:
         required: true
       TRELLIS_DEPLOY_SSH_KNOWN_HOSTS:
@@ -97,13 +101,56 @@ jobs:
       && github.actor != 'kodiakhq[bot]'
       && github.actor != 'dependabot[bot]'
       && !contains(github.event.head_commit.message, '[cd skip]')
+    env:
+      USE_DEPLOYER_APP: ${{ secrets.ITINERIS_DEPLOYER_CLIENT_ID != '' && secrets.ITINERIS_DEPLOYER_PRIVATE_KEY != '' }}
     steps:
+      - name: Check deploy credentials
+        env:
+          REPO_PAT: ${{ secrets.REPO_PAT }}
+        run: |
+          set -euo pipefail
+          if [[ "${USE_DEPLOYER_APP}" != 'true' && -z "${REPO_PAT}" ]]; then
+            echo "Pass ITINERIS_DEPLOYER_CLIENT_ID and ITINERIS_DEPLOYER_PRIVATE_KEY, or REPO_PAT." >&2
+            exit 1
+          fi
+
+      - name: Compute repository short names
+        id: repo-names
+        if: env.USE_DEPLOYER_APP == 'true'
+        env:
+          TRELLIS_REPOSITORY: ${{ inputs.TRELLIS_REPOSITORY }}
+          BEDROCK_REPOSITORY: ${{ github.repository }}
+          EXPECTED_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          TRELLIS_OWNER="${TRELLIS_REPOSITORY%%/*}"
+          if [[ "${TRELLIS_OWNER,,}" != "${EXPECTED_OWNER,,}" ]]; then
+            echo "TRELLIS_REPOSITORY's owner '${TRELLIS_OWNER}' does not match this workflow's owner '${EXPECTED_OWNER}'. The deployer App token is minted for a single owner, so a cross-owner Trellis repo is not supported." >&2
+            exit 1
+          fi
+          {
+            printf 'TRELLIS_REPO_SHORT=%s\n' "${TRELLIS_REPOSITORY#*/}"
+            printf 'BEDROCK_REPO_SHORT=%s\n' "${BEDROCK_REPOSITORY#*/}"
+          } >>"${GITHUB_OUTPUT}"
+
+      - name: Generate deployer token
+        id: deployer-token
+        if: env.USE_DEPLOYER_APP == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ secrets.ITINERIS_DEPLOYER_CLIENT_ID }}
+          private-key: ${{ secrets.ITINERIS_DEPLOYER_PRIVATE_KEY }}
+          repositories: |
+            ${{ steps.repo-names.outputs.TRELLIS_REPO_SHORT }}
+            ${{ (inputs.SSH_HOST != '' || inputs.SSH_PORT != '') && '.github' || '' }}
+          permission-contents: read
+
       - name: Checkout Trellis
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: "${{ inputs.TRELLIS_REPOSITORY }}"
           path: trellis
-          token: "${{ secrets.REPO_PAT }}"
+          token: "${{ steps.deployer-token.outputs.token || secrets.REPO_PAT }}"
 
       - name: Check shared actions ref
         if: ${{ inputs.SSH_HOST != '' || inputs.SSH_PORT != '' }}
@@ -123,7 +170,7 @@ jobs:
         with:
           repository: ItinerisLtd/.github
           ref: ${{ inputs.SHARED_ACTIONS_REF }}
-          token: "${{ secrets.REPO_PAT }}"
+          token: "${{ steps.deployer-token.outputs.token || secrets.REPO_PAT }}"
           path: .itineris-actions
           persist-credentials: false
 
@@ -243,6 +290,16 @@ jobs:
       - name: Disconnect from Tailscale
         run: sudo tailscale down
 
+      - name: Generate LAST_DEPLOY token
+        id: last-deploy-token
+        if: env.USE_DEPLOYER_APP == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ secrets.ITINERIS_DEPLOYER_CLIENT_ID }}
+          private-key: ${{ secrets.ITINERIS_DEPLOYER_PRIVATE_KEY }}
+          repositories: ${{ steps.repo-names.outputs.BEDROCK_REPO_SHORT }}
+          permission-environments: write
+
       - name: Cache deployed commit hash
         run: >-
           gh variable set LAST_DEPLOY
@@ -250,4 +307,4 @@ jobs:
           --body='${{ github.sha }}'
         working-directory: bedrock
         env:
-          GITHUB_TOKEN: ${{ secrets.REPO_PAT }}
+          GITHUB_TOKEN: ${{ steps.last-deploy-token.outputs.token || secrets.REPO_PAT }}
